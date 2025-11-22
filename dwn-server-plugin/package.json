@@ -4,13 +4,20 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "bash scripts/start-with-custom-plugin.sh"
+    "start": "bash scripts/start-with-custom-plugin.sh",
+    "test:vc": "node scripts/test-vc-submit.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@web5/dwn-server": "^0.6.1"
+    "@web5/dwn-server": "^0.6.1",
+    "@web5/api": "^0.12.0",
+    "@web5/crypto": "^1.0.6",
+    "@web5/dids": "^1.0.0",
+    "@tbd54566975/dwn-sdk-js": "^0.4.0",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.0"
   }
 }
