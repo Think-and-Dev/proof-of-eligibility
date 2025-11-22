@@ -19,6 +19,9 @@ const initialFormData: ScreeningFormData = {
   consentimiento: false,
 };
 
+const EVALUATE_ELIGIBILITY_URL =
+  "https://p3000.m1100.opf-testnet-rofl-25.rofl.app/evaluateEligibility";
+
 function buildFhirQuestionnaireResponse(formData: ScreeningFormData) {
   return {
     resourceType: "QuestionnaireResponse",
@@ -357,15 +360,31 @@ export default function Home() {
     setFormData((prev) => ({ ...prev, consentimiento: checked }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isStep5Valid()) {
       setStep5Error("Debes aceptar el consentimiento para continuar.");
       return;
     }
     setStep5Error(null);
 
-    // Envío simulado: mostramos JSON tipado en consola
-    console.log("ScreeningFormData enviado:", formData);
+    const fhirPayload = buildFhirQuestionnaireResponse(formData);
+
+    try {
+      const response = await fetch(EVALUATE_ELIGIBILITY_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(fhirPayload),
+      });
+
+      const text = await response.text();
+      console.log("evaluateEligibility status:", response.status);
+      console.log("evaluateEligibility body:", text);
+    } catch (error) {
+      console.error("Error al llamar a evaluateEligibility:", error);
+    }
+
     setSubmitted(true);
   };
 

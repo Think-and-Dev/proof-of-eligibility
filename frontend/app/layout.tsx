@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -27,7 +28,36 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
+          <nav className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between text-sm text-slate-900">
+            <div className="flex items-center gap-2">
+              <span className="h-6 w-6 rounded-full bg-sky-600 flex items-center justify-center text-[11px] font-semibold text-white">
+                P
+              </span>
+              <div className="flex flex-col leading-tight">
+                <span className="font-semibold text-slate-900 text-sm">Proof of Eligibility</span>
+                <span className="text-[11px] text-slate-500">Farma-grade patient screening</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <Link
+                href="/"
+                className="px-3 py-1.5 rounded-full border border-slate-200 hover:border-sky-500 hover:text-sky-700 hover:bg-sky-50 transition-colors"
+              >
+                Modo usuario
+              </Link>
+              <Link
+                href="/explore"
+                className="px-3 py-1.5 rounded-full border border-slate-900 bg-slate-900 text-slate-50 hover:bg-sky-700 hover:border-sky-700 transition-colors"
+              >
+                Modo farmacéutica (Explore)
+              </Link>
+            </div>
+          </nav>
+        </header>
+
+        <main className="min-h-screen bg-slate-50">{children}</main>
       </body>
     </html>
   );
