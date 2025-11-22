@@ -11,12 +11,17 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@web5/dwn-server": "^0.6.1",
+    "@tbd54566975/dwn-sdk-js": "^0.5.2",
     "@web5/api": "^0.12.0",
     "@web5/crypto": "^1.0.6",
     "@web5/dids": "^1.0.0",
-    "@tbd54566975/dwn-sdk-js": "^0.4.0",
+    "@web5/dwn-server": "^0.6.1",
+    "dotenv": "^17.2.3",
     "node-fetch": "^3.3.2",
     "uuid": "^9.0.0"
   }
