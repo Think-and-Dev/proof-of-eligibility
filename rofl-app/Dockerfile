@@ -10,7 +10,7 @@ RUN npm install
 COPY src/ /app/src/
 
 # Exponer el puerto
-EXPOSE 3000
+EXPOSE 3001
 
 # Punto de entrada: ejecuta el servidor Express
 CMD ["node", "src/evaluate_eligibility.js"]

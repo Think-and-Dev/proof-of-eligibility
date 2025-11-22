@@ -2,9 +2,9 @@
     "name": "proof-of-eligibility",
     "version": "1.0.0",
     "description": "Servidor Express para evaluar elegibilidad dentro de un nodo TEE de Oasis",
-    "main": "src/evaluate_eligibility.js",
+    "main": "src/server.js",
     "scripts": {
-        "start": "node src/evaluate_eligibility.js",
+        "start": "node src/server.js",
         "build-and-push": "./build-and-push.sh",
         "oasis-build": "oasis rofl build",
         "oasis-update": "oasis rofl update",
