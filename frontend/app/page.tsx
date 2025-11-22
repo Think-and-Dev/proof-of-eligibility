@@ -20,7 +20,7 @@ const initialFormData: ScreeningFormData = {
 };
 
 const EVALUATE_ELIGIBILITY_URL =
-  "https://p3000.m1100.opf-testnet-rofl-25.rofl.app/evaluateEligibility";
+  "https://p3000.m1104.test-proxy-b.rofl.app/evaluateEligibility";
 
 function buildFhirQuestionnaireResponse(formData: ScreeningFormData) {
   return {
