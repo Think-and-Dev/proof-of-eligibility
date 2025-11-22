@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-// Vista de detalle de paciente orientada a demo: usa el ID en la URL y muestra
-// información simulada coherente con la app de Explore.
+// Patient detail view for demo purposes: uses the ID in the URL and shows
+// simulated information consistent with the Explore app.
 export default function PatientDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function PatientDetailPage() {
     const num = id.replace(/[^0-9]/g, "") || "001";
     return {
       pseudoId: `SCR-${id}`,
-      patientLabel: `Paciente ${num}`,
+      patientLabel: `Patient ${num}`,
     };
   }, [id]);
 
@@ -27,24 +27,24 @@ export default function PatientDetailPage() {
   const timeline = useMemo(
     () => [
       {
-        label: "Screening inicial (off-chain)",
+        label: "Initial screening (off-chain)",
         date: "2025-11-15",
         detail:
-          "Formulario completado por el paciente en modo usuario. El resultado se prepara para ser firmado.",
+          "Form completed by the patient in user mode. The result is prepared to be signed.",
         extra: `Screening hash (pre-TEE): ${screeningHash}`,
       },
       {
-        label: "Evaluación automática en TEE Oasis + hash on-chain",
+        label: "Automatic evaluation in Oasis TEE + on-chain hash",
         date: "2025-11-16",
         detail:
-          "Motor de elegibilidad ejecutado sobre FHIR QuestionnaireResponse dentro de un TEE descentralizado (Oasis Foundation). El enclave firma el resultado y publica el hash de screening en Ethereum.",
+          "Eligibility engine executed over a FHIR QuestionnaireResponse inside a decentralized TEE (Oasis Foundation). The enclave signs the result and publishes the screening hash on Ethereum.",
         extra: `Motor: ${engineVersion} (hash ${engineHash})`,
       },
       {
-        label: "Emisión de Verified Credential on-chain",
+        label: "Verified Credential issuance on-chain",
         date: "2025-11-16",
         detail:
-          "VC de elegibilidad emitida y registrada en un contrato verificador. Los datos de la transacción se consultan vía explorador tipo ETHExplorer/Etherscan.",
+          "Eligibility VC issued and registered in a verifier contract. Transaction data can be retrieved via an explorer such as ETHExplorer/Etherscan.",
         extra: `Tx VC hash: ${vcTxHash}`,
       },
     ],
@@ -57,7 +57,7 @@ export default function PatientDetailPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-900 text-slate-50">
           <div>
             <h1 className="text-sm font-semibold">
-              Detalle de paciente · <span className="font-normal">{pseudo.patientLabel}</span>
+              Patient detail · <span className="font-normal">{pseudo.patientLabel}</span>
             </h1>
             <p className="text-[11px] text-slate-300 mt-0.5">
               Pseudo-ID: <span className="font-mono">{pseudo.pseudoId}</span>
@@ -67,38 +67,38 @@ export default function PatientDetailPage() {
             onClick={() => router.back()}
             className="text-[11px] px-3 py-1.5 rounded-full border border-slate-500 hover:border-slate-300 hover:bg-slate-800 transition-colors"
           >
-            Cerrar
+            Close
           </button>
         </div>
 
         <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-900">
           <section className="space-y-3">
             <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-              Snapshot clínico
+              Clinical snapshot
             </h2>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1 text-xs">
               <p>
-                <span className="font-medium">Estado de elegibilidad:</span> Simulado desde vista Explore y
-                enlazado conceptualmente a eventos on-chain (emisión de VC).
+                <span className="font-medium">Eligibility status:</span> Simulated from the Explore view and
+                conceptually linked to on-chain events (VC issuance).
               </p>
               <p>
-                <span className="font-medium">Dx previo:</span> Se obtiene del backend compartido con Explore.
+                <span className="font-medium">Previous diagnosis:</span> Retrieved from the backend shared with Explore.
               </p>
               <p>
-                <span className="font-medium">Ensayo clínico asignado:</span> Se alinea con el campo
-                <code className="px-1 mx-1 rounded bg-slate-200 text-[10px]">estudioClinico</code> usado en el mapa.
+                <span className="font-medium">Assigned clinical trial:</span> Aligned with the
+                <code className="px-1 mx-1 rounded bg-slate-200 text-[10px]">estudioClinico</code> field used on the map.
               </p>
               <p className="text-[11px] text-slate-500 mt-1">
-                Esta vista está preparada para consumir el mismo endpoint de pacientes que la pantalla Explore y
-                cruzar esos datos con un explorador de Ethereum (ej. Etherscan/ETHExplorer) para mostrar el rastro
-                criptográfico de cada movimiento.
+                This view is designed to consume the same patients endpoint as the Explore screen and
+                cross those data with an Ethereum explorer (e.g. Etherscan/ETHExplorer) to show the cryptographic
+                trail of each operation.
               </p>
             </div>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-              Timeline de movimientos
+              Activity timeline
             </h2>
             <ol className="relative border-l border-slate-200 ml-2 text-xs">
               {timeline.map((item) => (
@@ -120,13 +120,13 @@ export default function PatientDetailPage() {
 
         <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
           <p className="text-[11px] text-slate-500">
-            Esta pantalla está pensada como vista de auditoría para farmacéuticas y CROs.
+            This screen is intended as an audit view for pharmaceutical sponsors and CROs.
           </p>
           <button
             onClick={() => router.push("/explore")}
             className="text-[11px] px-3 py-1.5 rounded-full border border-sky-600 text-sky-700 hover:bg-sky-50 transition-colors"
           >
-            Volver a Explore
+            Back to Explore
           </button>
         </div>
       </div>

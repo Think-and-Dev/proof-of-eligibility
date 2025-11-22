@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+require('dotenv').config();
+
 
 // Input: objeto con { age, hasDiabetes, creatinine }
 // Output: true / false
@@ -58,9 +62,9 @@ function evaluateEligibility(input) {
 
     // Regla 2: diagnóstico compatible
     const dxElegibles = [
-        "Sí, Alzheimer",
-        "Sí, Deterioro Cognitivo Leve",
-        "No, pero presento síntomas",
+        "Yes, Alzheimer's disease",
+        "Yes, Mild Cognitive Impairment (MCI)",
+        "No, but I have symptoms",
     ];
     if (!dxElegibles.includes(diagnosticoPrevio)) {
         return false;
@@ -71,7 +75,7 @@ function evaluateEligibility(input) {
         return false;
     }
     const soloNinguno =
-        sintomas.length === 1 && sintomas[0] === "Ninguno de los anteriores";
+        sintomas.length === 1 && sintomas[0] === "None of the above";
     if (soloNinguno) {
         return false;
     }
@@ -89,12 +93,12 @@ function evaluateEligibility(input) {
     // Regla 5: exclusiones duras
 
     // 5.1 Participación reciente en otros ensayos
-    if (participacionEnsayos === "Sí") {
+    if (participacionEnsayos === "Yes") {
         return false;
     }
 
     // 5.2 Antecedentes de ACV o convulsiones
-    if (antecedentesACVConvulsiones === "Sí") {
+    if (antecedentesACVConvulsiones === "Yes") {
         return false;
     }
 
@@ -109,10 +113,10 @@ function evaluateEligibility(input) {
     // 5.4 Ejemplo de exclusión combinando comorbilidades/medicaciones
     const enfermedadCardiaca =
         Array.isArray(condicionesMedicas) &&
-        condicionesMedicas.includes("Enfermedad cardíaca");
+        condicionesMedicas.includes("Heart disease");
     const antipsicoticos =
         Array.isArray(medicacionesActuales) &&
-        medicacionesActuales.includes("Antipsicóticos");
+        medicacionesActuales.includes("Antipsychotics");
     if (enfermedadCardiaca && antipsicoticos) {
         return false;
     }
@@ -124,21 +128,80 @@ function evaluateEligibility(input) {
 // --- Servidor Express ---
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
+
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+}));
 
 // Middleware para parsear JSON
 app.use(express.json());
 
+// Utilidades de cifrado/descifrado (AES-256-GCM)
+function getEncryptionKeyBuffer() {
+  const keyBase64 = process.env.ENCRYPTION_KEY;
+  if (!keyBase64) {
+    throw new Error('ENCRYPTION_KEY is not defined in environment variables');
+  }
+  const key = Buffer.from(keyBase64, 'base64');
+  if (key.length !== 32) {
+    throw new Error('ENCRYPTION_KEY must be a 32-byte base64-encoded key (AES-256)');
+  }
+  return key;
+}
+
+function decryptPayload(encrypted) {
+  if (!encrypted || typeof encrypted !== 'object') {
+    throw new Error('Invalid encrypted payload');
+  }
+
+  const { iv, ciphertext, authTag } = encrypted;
+  if (!iv || !ciphertext) {
+    throw new Error('Missing iv or ciphertext fields in encrypted payload');
+  }
+
+  const key = getEncryptionKeyBuffer();
+  const ivBuf = Buffer.from(iv, 'base64');
+  const cipherBuf = Buffer.from(ciphertext, 'base64');
+
+  // Si el authTag viene separado
+  let dataBuf = cipherBuf;
+  let tagBuf = null;
+  if (authTag) {
+    tagBuf = Buffer.from(authTag, 'base64');
+  } else if (cipherBuf.length > 16) {
+    // Convention: last 16 bytes are the auth tag
+    tagBuf = cipherBuf.subarray(cipherBuf.length - 16);
+    dataBuf = cipherBuf.subarray(0, cipherBuf.length - 16);
+  } else {
+    throw new Error('Invalid ciphertext length for AES-GCM');
+  }
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, ivBuf);
+  decipher.setAuthTag(tagBuf);
+
+  const decrypted = Buffer.concat([decipher.update(dataBuf), decipher.final()]);
+  const asString = decrypted.toString('utf8');
+  return JSON.parse(asString);
+}
+
 // Endpoint POST para evaluar elegibilidad
 app.post('/evaluateEligibility', (req, res) => {
     try {
-        console.log('Evaluando elegibilidad...');
-        const input = req.body;
-        console.log('Input:', input);
+        console.log('Evaluating eligibility...');
+
+        // Se espera un objeto cifrado { iv, ciphertext, authTag? }
+        const encrypted = req.body;
+        console.log('Received encrypted payload:', encrypted);
+
+        const input = decryptPayload(encrypted);
+        console.log('Decrypted payload:', input);
         // Validar que el body tenga los campos necesarios
         if (!input || typeof input !== 'object') {
             return res.status(400).json({
-                error: 'El cuerpo de la petición debe ser un objeto JSON válido'
+                error: 'Request body must be a valid JSON object'
             });
         }
 
@@ -147,21 +210,73 @@ app.post('/evaluateEligibility', (req, res) => {
         res.json({
             eligible: result
         });
-        console.log('Elegibilidad evaluada:', result);
+        console.log('Eligibility evaluated:', result);
     } catch (error) {
         res.status(500).json({
-            error: 'Error al procesar la solicitud',
+            error: 'Error processing request',
             message: error.message
         });
     }
 });
 
-// Endpoint de salud
+async function resolveDid(did) {
+  const resolvedDid = did || 'did:example:patient-123456789abcdef';
+  const dwnEndpoint = process.env.MOCK_DWN_ENDPOINT || 'https://mock-dwn.local';
+
+  return {
+    did: resolvedDid,
+    services: [
+      {
+        id: '#dwn',
+        type: 'DecentralizedWebNode',
+        serviceEndpoint: dwnEndpoint,
+      },
+    ],
+  };
+}
+
+async function fetchVcFromDwn(didDocument) {
+  const dwnService = (didDocument.services || []).find(
+    (s) => s.type === 'DecentralizedWebNode'
+  );
+
+  return {
+    vcId: 'vc-mock-eligibility-001',
+    subjectDid: didDocument.did,
+    dwnEndpoint: dwnService ? dwnService.serviceEndpoint : null,
+    status: 'Pending Evaluation',
+  };
+}
+
+app.post('/did-login', async (req, res) => {
+  try {
+    const { did } = req.body || {};
+
+    const didDocument = await resolveDid(did);
+    const vc = await fetchVcFromDwn(didDocument);
+
+    res.json({
+      ok: true,
+      did: didDocument.did,
+      dwnEndpoint: vc.dwnEndpoint,
+      vc,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: 'Error in did-login',
+      message: error.message,
+    });
+  }
+});
+
+// Health endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-// Iniciar servidor
+
+// Start server
 app.listen(PORT, () => {
-    console.log(`Servidor Express ejecutándose en el puerto ${PORT}`);
+    console.log(`Express server running on port ${PORT}`);
 });

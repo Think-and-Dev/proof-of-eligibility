@@ -12,7 +12,7 @@ type Patient = {
   diagnosticoPrevio: string;
   sintomaPrincipal: string;
   estudioClinico: string;
-  estadoPaciente: "Elegible" | "A revisar" | "No elegible";
+  estadoPaciente: "Eligible" | "To review" | "Not eligible";
   lng: number;
   lat: number;
 };
@@ -20,9 +20,10 @@ type Patient = {
 type ExploreMapProps = {
   patients: Patient[];
   showHospitals: boolean;
+  onSelectPatient: (id: string) => void;
 };
 
-function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
+function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
@@ -128,14 +129,14 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
         });
       }
 
-      // Capa que usa la imagen animada
+      // Capa que usa la imagen animada (inicialmente oculta si showHospitals es false)
       if (!map.getLayer("pulsing-dot-layer")) {
         map.addLayer({
           id: "pulsing-dot-layer",
           type: "symbol",
           source: "pulsing-dot-source",
           layout: {
-            "icon-image": "pulsing-dot",
+            "icon-image": showHospitals ? "pulsing-dot" : "",
             "icon-allow-overlap": true,
           },
         });
@@ -190,16 +191,12 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
     const latOffset = -0.02; // desplazar hacia abajo (sur)
 
     patients.forEach((p) => {
-      const studyColor =
-        p.estudioClinico === "Alzheimer-Aducanumab-2023-06-01"
-          ? "#22c55e" // verde
-          : p.estudioClinico === "Alzheimer-Lecanemab-2022-11-15"
-          ? "#0ea5e9" // celeste
-          : p.estudioClinico === "Parkinson-Prasinezumab-2021-09-30"
-          ? "#f97316" // naranja
-          : p.estudioClinico === "Parkinson-Tavapadon-2020-04-20"
-          ? "#a855f7" // violeta
-          : "#ef4444"; // rojo para Cancer de mama-Pertuzumab-2019-02-10
+      const statusColor =
+        p.estadoPaciente === "Eligible"
+          ? "#22c55e" // green
+          : p.estadoPaciente === "To review"
+          ? "#facc15" // amber
+          : "#ef4444"; // red for Not eligible
       const compactedLng =
         compactCenter[0] + (p.lng - compactCenter[0]) * compactFactor;
       const compactedLat =
@@ -211,18 +208,18 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
       const pseudoId = `SCR-${p.id}`;
 
       const mocaScore =
-        p.estadoPaciente === "Elegible"
+        p.estadoPaciente === "Eligible"
           ? "26/30"
-          : p.estadoPaciente === "A revisar"
+          : p.estadoPaciente === "To review"
           ? "23/30"
           : "—";
 
       const eligibilityReasons =
-        p.estadoPaciente === "Elegible"
-          ? ["Cumple rango etario.", "Sin comorbilidades excluyentes."]
-          : p.estadoPaciente === "A revisar"
-          ? ["Verificar comorbilidades y score cognitivo."]
-          : ["No cumple criterios de inclusión o presenta criterios de exclusión."];
+        p.estadoPaciente === "Eligible"
+          ? ["Within target age range.", "No excluding comorbidities."]
+          : p.estadoPaciente === "To review"
+          ? ["Check comorbidities and cognitive score."]
+          : ["Does not meet inclusion criteria or presents exclusion criteria."];
 
       const phase =
         p.estudioClinico.startsWith("Alzheimer-") ||
@@ -246,7 +243,7 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
       const engineVersion = "v1.3.2";
       const engineHash = "0x9f3a21";
 
-      const marker = new mapboxgl.Marker({ color: studyColor })
+      const marker = new mapboxgl.Marker({ color: statusColor })
         .setLngLat([shiftedLng, shiftedLat])
         .setPopup(
           new mapboxgl.Popup({ offset: 12 }).setHTML(
@@ -256,7 +253,7 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
     <div>
       <div style="font-weight:600;">
-        Paciente ${p.nombre.split(" ")[1]} <span style="color:#64748b;">(${p.id})</span>
+        Patient ${p.nombre.split(" ")[1]} <span style="color:#64748b;">(${p.id})</span>
       </div>
       <div style="font-size:10px; color:#475569; margin-top:2px;">
         Pseudo-ID: <span style="font-weight:500;">${pseudoId}</span>
@@ -264,71 +261,74 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
     </div>
     <span
       style="padding:2px 6px; border-radius:999px; border:1px solid ${
-        p.estadoPaciente === "Elegible"
+        p.estadoPaciente === "Eligible"
           ? "#bbf7d0"
-          : p.estadoPaciente === "A revisar"
+          : p.estadoPaciente === "To review"
           ? "#fed7aa"
           : "#fecaca"
       }; background-color:${
-        p.estadoPaciente === "Elegible"
+        p.estadoPaciente === "Eligible"
           ? "#ecfdf3"
-          : p.estadoPaciente === "A revisar"
+          : p.estadoPaciente === "To review"
           ? "#fffbeb"
           : "#fef2f2"
       }; color:${
-        p.estadoPaciente === "Elegible"
+        p.estadoPaciente === "Eligible"
           ? "#15803d"
-          : p.estadoPaciente === "A revisar"
+          : p.estadoPaciente === "To review"
           ? "#b45309"
           : "#b91c1c"
       }; font-size:10px; white-space:nowrap;">
-      ${p.estadoPaciente === "A revisar" ? "Revisión requerida" : p.estadoPaciente}
+      ${p.estadoPaciente === "To review" ? "Review required" : p.estadoPaciente}
     </span>
   </div>
 
-  <!-- 3. Datos clínicos -->
-  <div style="margin-bottom:6px; padding:4px 6px; background-color:#f8fafc; border-radius:6px;">
-    <div style="margin-bottom:2px; color:#0f172a;">
-      <strong>Datos clínicos</strong>
+  <!-- 3. Clinical data (collapsible) -->
+  <details open style="margin-bottom:4px; padding:4px 6px; background-color:#f8fafc; border-radius:6px;">
+    <summary style="cursor:pointer; color:#0f172a; font-weight:600; font-size:11px; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+      <span>Clinical data</span>
+      <span style="font-size:10px; color:#64748b;">Tap to expand</span>
+    </summary>
+    <div style="margin-top:4px;">
+      <ul style="list-style:none; padding-left:0; margin:0;">
+        <li>Age: <span style="font-weight:500;">${p.edad}</span></li>
+        <li>Previous diagnosis: <span style="font-weight:500;">${p.diagnosticoPrevio}</span></li>
+        <li>Main symptoms: <span>${p.sintomaPrincipal}</span></li>
+        <li>MoCA: <span style="font-weight:500;">${mocaScore}</span></li>
+        <li style="margin-top:2px;">
+          Eligibility reason:
+          <ul style="margin:2px 0 0 12px; padding:0;">
+            ${eligibilityReasons
+              .map(
+                (r) =>
+                  `<li style="list-style:disc;">${r}</li>`
+              )
+              .join("")}
+          </ul>
+        </li>
+      </ul>
     </div>
-    <ul style="list-style:none; padding-left:0; margin:0;">
-      <li>Edad: <span style="font-weight:500;">${p.edad}</span></li>
-      <li>Dx previo: <span style="font-weight:500;">${p.diagnosticoPrevio}</span></li>
-      <li>Síntomas principales: <span>${p.sintomaPrincipal}</span></li>
-      <li>MoCA: <span style="font-weight:500;">${mocaScore}</span></li>
-      <li style="margin-top:2px;">
-        Razón de elegibilidad:
-        <ul style="margin:2px 0 0 12px; padding:0;">
-          ${eligibilityReasons
-            .map(
-              (r) =>
-                `<li style="list-style:disc;">${r}</li>`
-            )
-            .join("")}
-        </ul>
-      </li>
-    </ul>
-  </div>
+  </details>
 
-  <!-- 4. Información del estudio -->
-  <div style="margin-bottom:6px; padding:4px 6px; background-color:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
-    <div style="margin-bottom:2px; color:#0f172a; display:flex; align-items:center; gap:4px;">
-      <span style="display:inline-block; width:8px; height:8px; border-radius:999px; background-color:${studyColor};"></span>
-      <strong>Información del estudio</strong>
-    </div>
-    <div style="font-size:10px; color:#111827;">
-      Estudio: <span style="font-weight:500;">${p.estudioClinico}</span><br/>
-      Fase: <span style="font-weight:500;">${phase}</span><br/>
+  <!-- 4. Study information (collapsible) -->
+  <details style="margin-bottom:4px; padding:4px 6px; background-color:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
+    <summary style="cursor:pointer; color:#0f172a; font-weight:600; font-size:11px; list-style:none; display:flex; align-items:center; gap:4px;">
+      <span style="display:inline-block; width:8px; height:8px; border-radius:999px; background-color:${statusColor};"></span>
+      <span>Study information</span>
+    </summary>
+    <div style="font-size:10px; color:#111827; margin-top:4px;">
+      Study: <span style="font-weight:500;">${p.estudioClinico}</span><br/>
+      Phase: <span style="font-weight:500;">${phase}</span><br/>
       Target: <span style="font-weight:500;">${target}</span>
     </div>
-  </div>
+  </details>
 
   <!-- 5. Auditoría y blockchain -->
   <div style="margin-bottom:6px; padding:4px 6px; background-color:#0f172a; color:#e5e7eb; border-radius:6px; font-size:10px;">
-    <div style="font-weight:600; margin-bottom:2px;">Auditoría & blockchain</div>
+    <div style="font-weight:600; margin-bottom:2px;">Audit & blockchain</div>
     <div>CID Filecoin: <span style="font-family:monospace;">${cidFilecoin}</span></div>
     <div>Input Hash: <span style="font-family:monospace;">${inputHash}</span></div>
-    <div>Motor: <span style="font-weight:500;">${engineVersion}</span> (hash <span style="font-family:monospace;">${engineHash}</span>)</div>
+    <div>Engine: <span style="font-weight:500;">${engineVersion}</span> (hash <span style="font-family:monospace;">${engineHash}</span>)</div>
   </div>
 
   <!-- 6. Accesos a credenciales -->
@@ -336,24 +336,24 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
     <a
       href="/patient/${encodeURIComponent(p.id)}"
       style="display:inline-flex; justify-content:center; align-items:center; margin-bottom:4px; padding:4px 8px; border-radius:999px; border:1px solid #0f172a; background-color:#0f172a; color:#f9fafb; font-size:10px; font-weight:500; text-decoration:none;">
-      Ver detalle del paciente
+      View patient detail
     </a>
     <a
       href="https://vc.example.com/user/${encodeURIComponent(p.id)}"
       target="_blank"
       rel="noreferrer"
       style="color:#0369a1; text-decoration:underline; font-weight:500;">
-      Ver Verified Credential del usuario
+      View user's Verified Credential
     </a>
     <a
       href="https://vc.example.com/process/${encodeURIComponent(p.estudioClinico)}"
       target="_blank"
       rel="noreferrer"
       style="color:#0369a1; text-decoration:underline; font-weight:500;">
-      Ver Verified Credential del proceso
+      View process's Verified Credential
     </a>
     <div style="font-size:9px; color:#64748b; margin-top:2px;">
-      Emitidas por Synk.Health · Oasis TEE Attestation
+      Issued by Proof of Eligibility · Oasis TEE Attestation
     </div>
   </div>
 </div>
@@ -361,6 +361,11 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
           )
         )
         .addTo(map);
+
+      // Al hacer click en el marker (además del popup), seleccionar el paciente en la lista
+      marker.getElement().addEventListener("click", () => {
+        onSelectPatient(p.id);
+      });
 
       markers.push(marker);
       bounds.extend([shiftedLng, shiftedLat]);
@@ -379,8 +384,7 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
     <div className="w-full h-full rounded-lg overflow-hidden bg-slate-100">
       {!hasToken && (
         <div className="flex items-center justify-center h-full text-xs text-red-600 px-4 text-center">
-          No se encontró un token de Mapbox. Agrega NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN en tu archivo
-          .env.local y reinicia el servidor.
+          No Mapbox token found. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to your .env.local file and restart the dev server.
         </div>
       )}
       <div ref={mapContainerRef} className="w-full h-full" />
@@ -391,559 +395,565 @@ function ExploreMap({ patients, showHospitals }: ExploreMapProps) {
 // Encargado de obtener la información de pacientes desde otro servicio de backend.
 // Por ahora devuelve datos mockeados, que luego se reemplazarán por una llamada real (fetch/axios, etc.).
 async function fetchPatientsFromBackend(): Promise<Patient[]> {
-  // TODO: reemplazar por llamada real al servicio de backend
-  return [
+  // TODO: replace with real backend call
+  const patients: Patient[] = [
     {
       id: "P-001",
-      nombre: "Paciente 001",
+      nombre: "Patient 001",
       edad: 68,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Pérdida de memoria, Dificultad para concentrarse",
+      sintomaPrincipal: "Memory loss, Difficulty concentrating",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.38157,
       lat: -34.60374,
     },
     {
       id: "P-002",
-      nombre: "Paciente 002",
+      nombre: "Patient 002",
       edad: 61,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para encontrar palabras",
+      sintomaPrincipal: "Difficulty finding words",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.3981,
       lat: -34.5827,
     },
     {
       id: "P-003",
-      nombre: "Paciente 003",
+      nombre: "Patient 003",
       edad: 73,
-      diagnosticoPrevio: "Sin diagnóstico",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      diagnosticoPrevio: "No diagnosis",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.43,
       lat: -34.615,
     },
     {
       id: "P-004",
-      nombre: "Paciente 004",
+      nombre: "Patient 004",
       edad: 58,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Pérdida de memoria",
+      sintomaPrincipal: "Memory loss",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.39,
       lat: -34.61,
     },
     {
       id: "P-005",
-      nombre: "Paciente 005",
+      nombre: "Patient 005",
       edad: 65,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para concentrarse",
+      sintomaPrincipal: "Difficulty concentrating",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.37,
       lat: -34.59,
     },
     {
       id: "P-006",
-      nombre: "Paciente 006",
+      nombre: "Patient 006",
       edad: 72,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.41,
       lat: -34.62,
     },
     {
       id: "P-007",
-      nombre: "Paciente 007",
+      nombre: "Patient 007",
       edad: 69,
-      diagnosticoPrevio: "Sin diagnóstico",
-      sintomaPrincipal: "Pérdida de memoria",
+      diagnosticoPrevio: "No diagnosis",
+      sintomaPrincipal: "Memory loss",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.42,
       lat: -34.6,
     },
     {
       id: "P-008",
-      nombre: "Paciente 008",
+      nombre: "Patient 008",
       edad: 63,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para encontrar palabras",
+      sintomaPrincipal: "Difficulty finding words",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.36,
       lat: -34.61,
     },
     {
       id: "P-009",
-      nombre: "Paciente 009",
+      nombre: "Patient 009",
       edad: 70,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Dificultad para concentrarse",
+      sintomaPrincipal: "Difficulty concentrating",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.4,
       lat: -34.59,
     },
     {
       id: "P-010",
-      nombre: "Paciente 010",
+      nombre: "Patient 010",
       edad: 66,
-      diagnosticoPrevio: "Sin diagnóstico",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      diagnosticoPrevio: "No diagnosis",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.38,
       lat: -34.6,
     },
     {
       id: "P-011",
-      nombre: "Paciente 011",
+      nombre: "Patient 011",
       edad: 62,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.39,
       lat: -34.57,
     },
     {
       id: "P-012",
-      nombre: "Paciente 012",
+      nombre: "Patient 012",
       edad: 59,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Rigidez muscular",
-      estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "A revisar",
+      sintomaPrincipal: "Muscle rigidity",
+      estudioClinico: "Parkinson-Tavapadon-2020-04-20",
+      estadoPaciente: "To review",
       lng: -58.41,
       lat: -34.58,
     },
     {
       id: "P-013",
-      nombre: "Paciente 013",
+      nombre: "Patient 013",
       edad: 71,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Lentitud motora",
+      sintomaPrincipal: "Motor slowness",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.43,
       lat: -34.56,
     },
     {
       id: "P-014",
-      nombre: "Paciente 014",
+      nombre: "Patient 014",
       edad: 64,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Problemas de equilibrio",
+      sintomaPrincipal: "Balance problems",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.37,
       lat: -34.57,
     },
     {
       id: "P-015",
-      nombre: "Paciente 015",
+      nombre: "Patient 015",
       edad: 68,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.35,
       lat: -34.58,
     },
     {
       id: "P-016",
-      nombre: "Paciente 016",
+      nombre: "Patient 016",
       edad: 73,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Lentitud motora",
-      estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "No elegible",
+      sintomaPrincipal: "Muscle rigidity",
+      estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
+      estadoPaciente: "Not eligible",
       lng: -58.42,
       lat: -34.55,
     },
     {
       id: "P-017",
-      nombre: "Paciente 017",
+      nombre: "Patient 017",
       edad: 57,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Rigidez muscular",
+      sintomaPrincipal: "Motor slowness",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.44,
       lat: -34.57,
     },
     {
       id: "P-018",
-      nombre: "Paciente 018",
+      nombre: "Patient 018",
       edad: 60,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Problemas de equilibrio",
+      sintomaPrincipal: "Balance problems",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.39,
       lat: -34.54,
     },
     {
       id: "P-019",
-      nombre: "Paciente 019",
+      nombre: "Patient 019",
       edad: 69,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.33,
       lat: -34.59,
     },
     {
       id: "P-020",
-      nombre: "Paciente 020",
+      nombre: "Patient 020",
       edad: 63,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Lentitud motora",
+      sintomaPrincipal: "Muscle rigidity",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.36,
       lat: -34.53,
     },
     {
       id: "P-021",
-      nombre: "Paciente 021",
+      nombre: "Patient 021",
       edad: 55,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Nódulo palpable",
+      sintomaPrincipal: "Palpable nodule",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.4,
       lat: -34.62,
     },
     {
       id: "P-022",
-      nombre: "Paciente 022",
+      nombre: "Patient 022",
       edad: 52,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Dolor mamario",
+      sintomaPrincipal: "Breast pain",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.38,
       lat: -34.63,
     },
     {
       id: "P-023",
-      nombre: "Paciente 023",
+      nombre: "Patient 023",
       edad: 59,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Alteraciones en mamografía",
+      sintomaPrincipal: "Mammography alterations",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.35,
       lat: -34.64,
     },
     {
       id: "P-024",
-      nombre: "Paciente 024",
+      nombre: "Patient 024",
       edad: 61,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Nódulo palpable",
+      sintomaPrincipal: "Palpable nodule",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.37,
       lat: -34.66,
     },
     {
       id: "P-025",
-      nombre: "Paciente 025",
+      nombre: "Patient 025",
       edad: 56,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Dolor mamario",
+      sintomaPrincipal: "Breast pain",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.42,
       lat: -34.63,
     },
     {
       id: "P-026",
-      nombre: "Paciente 026",
+      nombre: "Patient 026",
       edad: 58,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Alteraciones en mamografía",
+      sintomaPrincipal: "Mammography alterations",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.39,
       lat: -34.65,
     },
     {
       id: "P-027",
-      nombre: "Paciente 027",
+      nombre: "Patient 027",
       edad: 54,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Pérdida de memoria",
+      sintomaPrincipal: "Memory loss",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.31,
       lat: -34.6,
     },
     {
       id: "P-028",
-      nombre: "Paciente 028",
+      nombre: "Patient 028",
       edad: 67,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para concentrarse",
+      sintomaPrincipal: "Difficulty concentrating",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.32,
       lat: -34.61,
     },
     {
       id: "P-029",
-      nombre: "Paciente 029",
+      nombre: "Patient 029",
       edad: 71,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.34,
       lat: -34.62,
     },
     {
       id: "P-030",
-      nombre: "Paciente 030",
+      nombre: "Patient 030",
       edad: 69,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Pérdida de memoria",
+      sintomaPrincipal: "Memory loss",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.33,
       lat: -34.6,
     },
     {
       id: "P-031",
-      nombre: "Paciente 031",
+      nombre: "Patient 031",
       edad: 65,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para encontrar palabras",
+      sintomaPrincipal: "Difficulty finding words",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.36,
       lat: -34.59,
     },
     {
       id: "P-032",
-      nombre: "Paciente 032",
+      nombre: "Patient 032",
       edad: 74,
-      diagnosticoPrevio: "Sin diagnóstico",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      diagnosticoPrevio: "No diagnosis",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.37,
       lat: -34.58,
     },
     {
       id: "P-033",
-      nombre: "Paciente 033",
+      nombre: "Patient 033",
       edad: 62,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.41,
       lat: -34.55,
     },
     {
       id: "P-034",
-      nombre: "Paciente 034",
+      nombre: "Patient 034",
       edad: 60,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Rigidez muscular",
+      sintomaPrincipal: "Muscle rigidity",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.43,
       lat: -34.56,
     },
     {
       id: "P-035",
-      nombre: "Paciente 035",
+      nombre: "Patient 035",
       edad: 70,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Lentitud motora",
+      sintomaPrincipal: "Motor slowness",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.45,
       lat: -34.57,
     },
     {
       id: "P-036",
-      nombre: "Paciente 036",
+      nombre: "Patient 036",
       edad: 58,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Problemas de equilibrio",
+      sintomaPrincipal: "Balance problems",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.4,
       lat: -34.58,
     },
     {
       id: "P-037",
-      nombre: "Paciente 037",
+      nombre: "Patient 037",
       edad: 67,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.38,
       lat: -34.55,
     },
     {
       id: "P-038",
-      nombre: "Paciente 038",
+      nombre: "Patient 038",
       edad: 72,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Rigidez muscular",
+      sintomaPrincipal: "Muscle rigidity",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.35,
       lat: -34.54,
     },
     {
       id: "P-039",
-      nombre: "Paciente 039",
+      nombre: "Patient 039",
       edad: 56,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Nódulo palpable",
+      sintomaPrincipal: "Palpable nodule",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.33,
       lat: -34.63,
     },
     {
       id: "P-040",
-      nombre: "Paciente 040",
+      nombre: "Patient 040",
       edad: 53,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Dolor mamario",
+      sintomaPrincipal: "Breast pain",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.36,
       lat: -34.64,
     },
     {
       id: "P-041",
-      nombre: "Paciente 041",
+      nombre: "Patient 041",
       edad: 60,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Alteraciones en mamografía",
+      sintomaPrincipal: "Mammography alterations",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.39,
       lat: -34.66,
     },
     {
       id: "P-042",
-      nombre: "Paciente 042",
+      nombre: "Patient 042",
       edad: 57,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Nódulo palpable",
+      sintomaPrincipal: "Palpable nodule",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.41,
       lat: -34.62,
     },
     {
       id: "P-043",
-      nombre: "Paciente 043",
+      nombre: "Patient 043",
       edad: 55,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Dolor mamario",
+      sintomaPrincipal: "Breast pain",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.37,
       lat: -34.61,
     },
     {
       id: "P-044",
-      nombre: "Paciente 044",
+      nombre: "Patient 044",
       edad: 62,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Alteraciones en mamografía",
+      sintomaPrincipal: "Mammography alterations",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.34,
       lat: -34.65,
     },
     {
       id: "P-045",
-      nombre: "Paciente 045",
+      nombre: "Patient 045",
       edad: 69,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Pérdida de memoria",
+      sintomaPrincipal: "Memory loss",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.32,
       lat: -34.57,
     },
     {
       id: "P-046",
-      nombre: "Paciente 046",
+      nombre: "Patient 046",
       edad: 63,
       diagnosticoPrevio: "MCI",
-      sintomaPrincipal: "Dificultad para encontrar palabras",
+      sintomaPrincipal: "Difficulty finding words",
       estudioClinico: "Alzheimer-Lecanemab-2022-11-15",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.31,
       lat: -34.58,
     },
     {
       id: "P-047",
-      nombre: "Paciente 047",
+      nombre: "Patient 047",
       edad: 75,
       diagnosticoPrevio: "Alzheimer",
-      sintomaPrincipal: "Cambios en el estado de ánimo",
+      sintomaPrincipal: "Mood changes",
       estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.3,
       lat: -34.59,
     },
     {
       id: "P-048",
-      nombre: "Paciente 048",
+      nombre: "Patient 048",
       edad: 61,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Temblor en reposo",
+      sintomaPrincipal: "Tremor at rest",
       estudioClinico: "Parkinson-Prasinezumab-2021-09-30",
-      estadoPaciente: "Elegible",
+      estadoPaciente: "Eligible",
       lng: -58.29,
       lat: -34.6,
     },
     {
       id: "P-049",
-      nombre: "Paciente 049",
+      nombre: "Patient 049",
       edad: 59,
       diagnosticoPrevio: "Parkinson",
-      sintomaPrincipal: "Rigidez muscular",
+      sintomaPrincipal: "Muscle rigidity",
       estudioClinico: "Parkinson-Tavapadon-2020-04-20",
-      estadoPaciente: "A revisar",
+      estadoPaciente: "To review",
       lng: -58.28,
       lat: -34.61,
     },
     {
       id: "P-050",
-      nombre: "Paciente 050",
+      nombre: "Patient 050",
       edad: 68,
       diagnosticoPrevio: "Cancer de mama",
-      sintomaPrincipal: "Nódulo palpable",
+      sintomaPrincipal: "Palpable nodule",
       estudioClinico: "Cancer de mama-Pertuzumab-2019-02-10",
-      estadoPaciente: "No elegible",
+      estadoPaciente: "Not eligible",
       lng: -58.27,
       lat: -34.62,
     },
   ];
+
+  // For the current demo, force all patients to belong to the same trial
+  return patients.map((p) => ({
+    ...p,
+    estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
+  }));
 }
 
 export default function ExplorePage() {
@@ -955,6 +965,7 @@ export default function ExplorePage() {
   const [ageMax, setAgeMax] = useState<string>("");
   const [diagnosis, setDiagnosis] = useState<string>("");
   const [symptom, setSymptom] = useState<string>("");
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
 
   useEffect(() => {
     fetchPatientsFromBackend().then(setPatients).catch(() => {
@@ -981,35 +992,35 @@ export default function ExplorePage() {
   const totalResults = filteredPatients.length;
 
   return (
-    <div className="h-screen bg-slate-50 flex">
+    <div className="h-screen bg-slate-950 flex text-slate-50">
       {/* Columna izquierda: filtros */}
-      <section className="w-[15%] h-full border-r border-slate-200 overflow-y-auto p-4 text-sm resize-x cursor-col-resize min-w-[180px] max-w-[40%]">
-        <h2 className="text-base font-semibold text-black mb-3">Filtros clínicos</h2>
+      <section className="w-[15%] h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm resize-x cursor-col-resize min-w-[180px] max-w-[40%]">
+        <h2 className="text-base font-semibold text-slate-50 mb-3">Clinical filters</h2>
 
         <div className="space-y-4">
-          <div className="flex items-center gap-2 text-xs text-black">
+          <div className="flex items-center gap-2 text-xs text-slate-200">
             <input
               id="toggle-hospitals"
               type="checkbox"
               checked={showHospitals}
               onChange={(e) => setShowHospitals(e.target.checked)}
-              className="h-3 w-3 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              className="h-3 w-3 rounded border-slate-600 bg-slate-900 text-sky-500 focus:ring-sky-500"
             />
             <label htmlFor="toggle-hospitals" className="select-none">
-              Mostrar hospitales públicos
+              Show public hospitals
             </label>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-black mb-1">
-              Estudio clínico
+            <label className="block text-xs font-medium text-slate-100 mb-1">
+              Clinical trial
             </label>
             <select
               value={selectedStudy}
               onChange={(e) => setSelectedStudy(e.target.value)}
-              className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+              className="block w-full rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
             >
-              <option value="">Todos</option>
+              <option value="">All</option>
               <option value="Alzheimer-Aducanumab-2023-06-01">
                 Alzheimer-Aducanumab-2023-06-01
               </option>
@@ -1029,135 +1040,152 @@ export default function ExplorePage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-black mb-1">
-              Estado del paciente
+            <label className="block text-xs font-medium text-slate-100 mb-1">
+              Patient status
             </label>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+              className="block w-full rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
             >
-              <option value="">Todos</option>
-              <option value="Elegible">Elegible</option>
-              <option value="A revisar">A revisar</option>
-              <option value="No elegible">No elegible</option>
+              <option value="">All</option>
+              <option value="Eligible">Eligible</option>
+              <option value="To review">To review</option>
+              <option value="Not eligible">Not eligible</option>
             </select>
           </div>
 
           <div>
-            <p className="font-medium text-black mb-1">Rango de edad</p>
+            <p className="font-medium text-slate-100 mb-1">Age range</p>
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                placeholder="Mín"
+                placeholder="Min"
                 value={ageMin}
                 onChange={(e) => setAgeMin(e.target.value)}
-                className="w-1/2 rounded-lg border border-slate-300 px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                className="w-1/2 rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
               />
-              <span className="text-xs text-black">a</span>
+              <span className="text-xs text-slate-300">to</span>
               <input
                 type="number"
-                placeholder="Máx"
+                placeholder="Max"
                 value={ageMax}
                 onChange={(e) => setAgeMax(e.target.value)}
-                className="w-1/2 rounded-lg border border-slate-300 px-2 py-1 text-xs text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                className="w-1/2 rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-black mb-1">
-              Diagnóstico previo
+            <label className="block text-xs font-medium text-slate-100 mb-1">
+              Previous diagnosis
             </label>
             <select
               value={diagnosis}
               onChange={(e) => setDiagnosis(e.target.value)}
-              className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+              className="block w-full rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
             >
-              <option value="">Todos</option>
+              <option value="">All</option>
               <option value="Alzheimer">Alzheimer</option>
               <option value="MCI">MCI</option>
-              <option value="Sin diagnóstico">Sin diagnóstico</option>
+              <option value="No diagnosis">No diagnosis</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-black mb-1">
-              Síntoma principal
+            <label className="block text-xs font-medium text-slate-100 mb-1">
+              Main symptom
             </label>
             <select
               value={symptom}
               onChange={(e) => setSymptom(e.target.value)}
-              className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white text-black focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+              className="block w-full rounded-lg border border-slate-700 px-2 py-1 text-xs bg-slate-900 text-slate-50 focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
             >
-              <option value="">Cualquiera</option>
-              <option value="Pérdida de memoria">Pérdida de memoria</option>
-              <option value="Dificultad para concentrarse">Dificultad para concentrarse</option>
-              <option value="Dificultad para encontrar palabras">
-                Dificultad para encontrar palabras
+              <option value="">Any</option>
+              <option value="Memory loss">Memory loss</option>
+              <option value="Difficulty concentrating">
+                Difficulty concentrating
               </option>
-              <option value="Cambios en el estado de ánimo">Cambios en el estado de ánimo</option>
+              <option value="Difficulty finding words">
+                Difficulty finding words
+              </option>
+              <option value="Mood changes">Mood changes</option>
             </select>
           </div>
 
-          <p className="text-[11px] text-black/70">
-            Estos filtros son un esquema inicial basado en el pre-screening clínico. Más adelante se
-            conectarán con datos reales de pacientes.
+          <p className="text-[11px] text-slate-400">
+            These filters are an initial scheme based on clinical pre-screening. Later they will be
+            connected to real patient data.
           </p>
         </div>
       </section>
 
       {/* Columna central: resultados */}
-      <section className="w-[15%] h-full border-r border-slate-200 overflow-y-auto p-4 text-sm flex flex-col resize-x cursor-col-resize min-w-[220px] max-w-[45%]">
+      <section className="w-[22%] h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm flex flex-col resize-x cursor-col-resize min-w-[220px] max-w-[45%]" id="explore-patient-list">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-black">Pacientes encontrados</h2>
-          <span className="text-xs text-black/70">{totalResults} resultados</span>
+          <h2 className="text-base font-semibold text-slate-50">Matched patients</h2>
+          <span className="text-xs text-slate-400">{totalResults} results</span>
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           {filteredPatients.map((p) => (
             <article
               key={p.id}
-              className="border border-slate-200 rounded-lg p-3 hover:border-sky-500 hover:shadow-sm transition-colors cursor-pointer text-sm"
+              data-patient-id={p.id}
+              className={`border rounded-lg p-3 bg-slate-950/80 hover:border-sky-500 hover:bg-slate-900/80 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] transition-colors cursor-pointer text-sm ${
+                selectedPatientId === p.id ? "border-sky-500 shadow-[0_0_20px_rgba(56,189,248,0.35)]" : "border-slate-800"
+              }`}
+              onClick={() => setSelectedPatientId(p.id)}
             >
               <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-black text-sm">
-                  {p.nombre} <span className="text-xs text-black/70">({p.id})</span>
+                <h3 className="font-semibold text-slate-50 text-sm">
+                  {p.nombre} <span className="text-xs text-slate-400">({p.id})</span>
                 </h3>
-                {p.estadoPaciente === "Elegible" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-emerald-50 border-emerald-200 text-emerald-700">
-                    Elegible
+                {p.estadoPaciente === "Eligible" && (
+                  <span className="text-[11px] px-2 py-1 rounded-full border bg-emerald-500/10 border-emerald-400/60 text-emerald-300">
+                    Eligible
                   </span>
                 )}
-                {p.estadoPaciente === "A revisar" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-amber-50 border-amber-200 text-amber-700">
-                    A revisar
+                {p.estadoPaciente === "To review" && (
+                  <span className="text-[11px] px-2 py-1 rounded-full border bg-amber-500/10 border-amber-400/60 text-amber-300">
+                    To review
                   </span>
                 )}
-                {p.estadoPaciente === "No elegible" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-rose-50 border-rose-200 text-rose-700">
-                    No elegible
+                {p.estadoPaciente === "Not eligible" && (
+                  <span className="text-[11px] px-2 py-1 rounded-full border bg-rose-500/10 border-rose-400/60 text-rose-300">
+                    Not eligible
                   </span>
                 )}
               </div>
-              <p className="text-xs text-black/80 mb-1">
-                Edad: <span className="font-medium">{p.edad}</span> · Diagnóstico previo:
+              <p className="text-xs text-slate-300 mb-1">
+                Age: <span className="font-medium">{p.edad}</span> · Previous diagnosis:
                 <span className="font-medium"> {p.diagnosticoPrevio}</span>
               </p>
-              <p className="text-xs text-black/80">Síntomas: {p.sintomaPrincipal}</p>
+              <p className="text-xs text-slate-300">Symptoms: {p.sintomaPrincipal}</p>
             </article>
           ))}
         </div>
       </section>
 
       {/* Columna derecha: mapa (ocupa el resto) */}
-      <section className="flex-1 h-full p-4 text-sm flex flex-col">
-        <div className="mb-3 flex items-center justify-between text-black text-sm">
-          <h2 className="text-base font-semibold">Mapa de pacientes</h2>
-          <span className="text-xs text-black/70">{totalResults} puntos</span>
+      <section className="flex-1 h-full p-4 text-sm flex flex-col bg-slate-950/80">
+        <div className="mb-3 flex items-center justify-between text-slate-100 text-sm">
+          <h2 className="text-base font-semibold">Patient map</h2>
+          <span className="text-xs text-slate-400">{totalResults} points</span>
         </div>
         <div className="flex-1 min-h-0">
-          <ExploreMap patients={filteredPatients} showHospitals={showHospitals} />
+          <ExploreMap
+            patients={filteredPatients}
+            showHospitals={showHospitals}
+            onSelectPatient={(id) => {
+              setSelectedPatientId(id);
+              const listEl = document.getElementById("explore-patient-list");
+              const cardEl = listEl?.querySelector<HTMLElement>(`[data-patient-id="${id}"]`);
+              if (listEl && cardEl) {
+                cardEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }
+            }}
+          />
         </div>
       </section>
     </div>

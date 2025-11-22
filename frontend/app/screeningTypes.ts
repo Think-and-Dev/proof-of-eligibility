@@ -1,26 +1,26 @@
-export type SexoBiologico = "Masculino" | "Femenino" | "Prefiero no decirlo" | "";
+export type SexoBiologico = "Male" | "Female" | "Prefer not to say" | "";
 
 export type DiagnosticoPrevio =
-  | "Sí, Alzheimer"
-  | "Sí, Deterioro Cognitivo Leve"
-  | "No, pero presento síntomas"
+  | "Yes, Alzheimer's disease"
+  | "Yes, Mild Cognitive Impairment (MCI)"
+  | "No, but I have symptoms"
   | "No"
   | "";
 
 export type PruebaCognitivaReciente =
-  | "Sí, y tengo el resultado"
-  | "Sí, pero no recuerdo el puntaje"
+  | "Yes, and I know the result"
+  | "Yes, but I don't remember the score"
   | "No"
   | "";
 
 export type AntecedentesFamiliares =
-  | "Sí, padre/madre"
-  | "Sí, abuelo/abuela"
+  | "Yes, parent"
+  | "Yes, grandparent"
   | "No"
-  | "No lo sé"
+  | "I don't know"
   | "";
 
-export type SiNo = "Sí" | "No" | "";
+export type SiNo = "Yes" | "No" | "";
 
 export interface ScreeningFormData {
   edad: number | null;

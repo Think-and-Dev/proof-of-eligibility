@@ -3,10 +3,10 @@
 import { useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
 
-// IMPORTANTE:
-// Define tu token de Mapbox en un archivo .env.local en la raíz del proyecto:
-// NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=tu_token_aqui
-// Luego reinicia `npm run dev`.
+// IMPORTANT:
+// Define your Mapbox token in a .env.local file at the project root:
+// NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_token_here
+// Then restart `npm run dev`.
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
@@ -61,18 +61,18 @@ export default function MapboxPage() {
       <main className="w-full max-w-5xl">
         <header className="mb-6 text-center">
           <h1 className="text-2xl md:text-3xl font-semibold text-black">
-            Vista de prueba con Mapbox
+            Mapbox test view
           </h1>
           <p className="mt-2 text-sm md:text-base text-black">
-            Esta página no forma parte del flujo clínico, es solo para experimentar con el mapa.
+            This page is not part of the clinical flow; it is only for experimenting with the map.
           </p>
         </header>
 
         <section className="bg-white shadow-md rounded-xl border border-slate-100 p-4 md:p-6">
           {!hasToken && (
             <p className="mb-4 text-sm text-red-600">
-              No se encontró un token de Mapbox. Agrega NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN en tu
-              archivo <code>.env.local</code> y reinicia el servidor.
+              No Mapbox token found. Add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to your
+              <code> .env.local </code> file and restart the dev server.
             </p>
           )}
 
