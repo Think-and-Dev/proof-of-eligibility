@@ -1,0 +1,9 @@
+node_modules
+DATASTORE
+RESOLVERCACHE
+data
+DATA
+INDEX
+MESSAGESTORE
+filecoin-store
+.env
