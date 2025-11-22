@@ -11,4 +11,5 @@ if (!globalThis.crypto) {
 }
 
 const dwnServer = new DwnServer();
+dwnServer.config.port = 3002
 await dwnServer.start()
