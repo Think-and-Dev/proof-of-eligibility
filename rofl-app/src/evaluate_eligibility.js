@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const express = require('express');
+
 // Input: objeto con { age, hasDiabetes, creatinine }
 // Output: true / false
 // Reglas de ejemplo para poc
@@ -26,29 +28,47 @@ function evaluateEligibility(input) {
     return true;
 }
 
+// --- Servidor Express ---
 
-// --- CLI simple CLI like usage ---
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-function printUsageAndExit() {
-    console.error(
-        "Uso: node eligibility.js '{\"age\": 50, \"hasDiabetes\": false, \"creatinine\": 1.2}'"
-    );
-    process.exit(1);
-}
+// Middleware para parsear JSON
+app.use(express.json());
 
-// Tomamos el JSON del segundo argumento
-const arg = process.argv[2];
-if (!arg) {
-    printUsageAndExit();
-}
+// Endpoint POST para evaluar elegibilidad
+app.post('/evaluateEligibility', (req, res) => {
+    try {
+        console.log('Evaluando elegibilidad...');
+        const input = req.body;
+        console.log('Input:', input);
+        // Validar que el body tenga los campos necesarios
+        if (!input || typeof input !== 'object') {
+            return res.status(400).json({
+                error: 'El cuerpo de la petición debe ser un objeto JSON válido'
+            });
+        }
 
-let input;
-try {
-    input = JSON.parse(arg);
-} catch (e) {
-    console.error("Error: el argumento no es JSON válido.");
-    printUsageAndExit();
-}
+        const result = evaluateEligibility(input);
 
-const result = evaluateEligibility(input);
-console.log(result ? "true" : "false");
+        res.json({
+            eligible: result
+        });
+        console.log('Elegibilidad evaluada:', result);
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error al procesar la solicitud',
+            message: error.message
+        });
+    }
+});
+
+// Endpoint de salud
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+// Iniciar servidor
+app.listen(PORT, () => {
+    console.log(`Servidor Express ejecutándose en el puerto ${PORT}`);
+});
