@@ -5,3 +5,5 @@ data
 DATA
 INDEX
 MESSAGESTORE
+filecoin-store
+.env
