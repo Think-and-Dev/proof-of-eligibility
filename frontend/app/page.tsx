@@ -23,7 +23,7 @@ const initialFormData: ScreeningFormData = {
 };
 
 const EVALUATE_ELIGIBILITY_URL =
-  "http://localhost:3001/evaluateEligibility";
+  process.env.NEXT_PUBLIC_ROFL_SERVER_URL + "/evaluateEligibility";
 
 const ENCRYPTION_KEY_BASE64 = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "";
 
