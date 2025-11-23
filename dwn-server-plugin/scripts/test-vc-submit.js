@@ -81,6 +81,7 @@ async function main() {
             dataFormat: 'application/json',
             schema: 'https://schema.org/VerifiableCredential',
             signer: signer,
+            recipient: did.uri,
         });
         console.log('   ✅ Mensaje RecordsWrite creado\n');
 
