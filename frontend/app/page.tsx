@@ -204,6 +204,8 @@ export default function Home() {
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [qrShown, setQrShown] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [vcResult, setVcResult] = useState<any | null>(null);
+  const [vcError, setVcError] = useState<string | null>(null);
 
   if (!user) {
     return (
@@ -358,6 +360,34 @@ export default function Home() {
   const handleSexoChange = (value: string) => {
     setStep1Error(null);
     setFormData((prev) => ({ ...prev, sexoBiologico: value as SexoBiologico }));
+  };
+
+  const handleFillWithDummyData = () => {
+    setStep1Error(null);
+    setStep2Error(null);
+    setStep3Error(null);
+    setStep4Error(null);
+    setStep5Error(null);
+
+    setFormData({
+      edad: 70,
+      sexoBiologico: "Male",
+      diagnosticoPrevio: "Yes, Mild Cognitive Impairment (MCI)",
+      sintomas: ["Recent memory loss"],
+      pruebaCognitivaReciente: "Yes, and I know the result",
+      puntajePrueba: 23,
+      antecedentesFamiliares: "Yes, grandparent",
+      condicionesMedicas: ["Hipertensión"],
+      medicacionesActuales: [
+        "Inhibidores de colinesterasa (donepezilo, rivastigmina)",
+      ],
+      participacionEnsayos: "No",
+      antecedentesACVConvulsiones: "No",
+      otrasDemencias: ["No"],
+      consentimiento: true,
+    });
+
+    setCurrentStep(5);
   };
 
   const handleNextFromStep1 = () => {
@@ -518,6 +548,7 @@ export default function Home() {
       return;
     }
     setStep5Error(null);
+    setVcError(null);
 
     const fhirPayload = buildFhirQuestionnaireResponse(formData);
 
@@ -532,11 +563,20 @@ export default function Home() {
         body: JSON.stringify(encrypted),
       });
 
-      const text = await response.text();
       console.log("evaluateEligibility status:", response.status);
-      console.log("evaluateEligibility body:", text);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("evaluateEligibility error body:", errorText);
+        setVcError(`Backend error (${response.status}): ${errorText || "Unknown error"}`);
+      } else {
+        const vcJson = await response.json();
+        console.log("evaluateEligibility VC:", vcJson);
+        setVcResult(vcJson);
+      }
     } catch (error) {
       console.error("Error calling evaluateEligibility:", error);
+      setVcError("Error calling evaluateEligibility. Check console for details.");
     }
 
     setSubmitted(true);
@@ -603,17 +643,51 @@ export default function Home() {
                 </ul>
               </div>
 
-              <div className="mt-6">
-                <p className="text-sm font-medium mb-1 text-slate-100">
-                  Example JSON payload (FHIR QuestionnaireResponse)
+              {vcResult && (
+                <div className="mt-6 bg-slate-900/60 border border-slate-800 rounded-lg p-4 text-sm text-slate-100">
+                  <p className="text-sm font-medium mb-2">Eligibility credential (VC)</p>
+                  <dl className="space-y-1 text-xs md:text-sm">
+                    <div className="flex gap-2">
+                      <dt className="w-32 font-medium">Issuer:</dt>
+                      <dd className="break-all">{vcResult.issuer ?? "-"}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="w-32 font-medium">Subject DID:</dt>
+                      <dd className="break-all">{vcResult.credentialSubject?.id ?? "-"}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="w-32 font-medium">Eligibility:</dt>
+                      <dd>
+                        {vcResult.credentialSubject?.eligibilityResult ||
+                          vcResult.credentialSubject?.eligibilityStatus ||
+                          "Not available"}
+                      </dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="w-32 font-medium">Issued at:</dt>
+                      <dd>{vcResult.issuanceDate ?? "-"}</dd>
+                    </div>
+                    {vcResult.expirationDate && (
+                      <div className="flex gap-2">
+                        <dt className="w-32 font-medium">Expires:</dt>
+                        <dd>{vcResult.expirationDate}</dd>
+                      </div>
+                    )}
+                    {vcResult.id && (
+                      <div className="flex gap-2">
+                        <dt className="w-32 font-medium">VC ID:</dt>
+                        <dd className="break-all">{vcResult.id}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              )}
+
+              {vcError && (
+                <p className="mt-4 text-xs text-red-400">
+                  {vcError}
                 </p>
-                <p className="text-xs text-slate-300 mb-2">
-                  This JSON shows how your answers could be serialized in a FHIR-compatible format, encrypted and processed inside a secure enclave.
-                </p>
-                <pre className="text-xs bg-slate-900 text-slate-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-{JSON.stringify(fhirPayload, null, 2)}
-                </pre>
-              </div>
+              )}
             </div>
           </DarkCard>
         </main>
@@ -713,8 +787,8 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <label className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <label className="block text-sm font-medium text-slate-100">
                     What is your biological sex?
                   </label>
                   <select
@@ -734,7 +808,14 @@ export default function Home() {
                 <p className="mt-3 text-xs text-red-400">{step1Error}</p>
               )}
 
-              <div className="mt-6 pt-4 border-t border-slate-800 flex justify-end">
+              <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleFillWithDummyData}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-slate-200 border border-slate-700 hover:bg-slate-800 transition-colors"
+                >
+                  Auto-fill & skip
+                </button>
                 <PrimaryButton type="button" onClick={handleNextFromStep1}>
                   Next
                 </PrimaryButton>
@@ -794,14 +875,14 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     Have you had a cognitive test recently (for example, MoCA or MMSE)?
                   </p>
                   <div className="mt-2 space-y-2 text-sm text-slate-100">
                     {["Yes, and I know the result", "Yes, but I don't remember the score", "No"].map(
                       (opt) => (
-                        <label key={opt} className="flex items-center gap-2 text-black">
+                        <label key={opt} className="flex items-center gap-2 text-slate-100">
                           <input
                             type="radio"
                             name="pruebaCognitivaReciente"
@@ -860,13 +941,13 @@ export default function Home() {
           {currentStep === 3 && (
             <>
               <div className="space-y-4">
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Tienes antecedentes familiares de Alzheimer?
                   </p>
-                  <div className="mt-2 space-y-2 text-sm text-black">
+                  <div className="mt-2 space-y-2 text-sm text-slate-100">
                     {["Sí, padre/madre", "Sí, abuelo/abuela", "No", "No lo sé"].map((opt) => (
-                      <label key={opt} className="flex items-center gap-2 text-black">
+                      <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
                           name="antecedentesFamiliares"
@@ -881,8 +962,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Tienes alguna de estas condiciones médicas?
                   </p>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
@@ -906,11 +987,11 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Estás tomando actualmente alguno de estos medicamentos?
                   </p>
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-black">
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
                     {[
                       "Inhibidores de colinesterasa (donepezilo, rivastigmina)",
                       "Memantina",
@@ -920,7 +1001,7 @@ export default function Home() {
                     ].map((opt) => (
                       <label
                         key={opt}
-                        className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-black"
+                        className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 text-slate-100 border border-slate-800"
                       >
                         <input
                           type="checkbox"
@@ -958,13 +1039,13 @@ export default function Home() {
           {currentStep === 4 && (
             <>
               <div className="space-y-4">
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Has participado en otro ensayo clínico en los últimos 12 meses?
                   </p>
-                  <div className="mt-2 space-y-2 text-sm text-black">
+                  <div className="mt-2 space-y-2 text-sm text-slate-100">
                     {["Sí", "No"].map((opt) => (
-                      <label key={opt} className="flex items-center gap-2 text-black">
+                      <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
                           name="participacionEnsayos"
@@ -979,13 +1060,13 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Tienes antecedentes de ACV o convulsiones?
                   </p>
-                  <div className="mt-2 space-y-2 text-sm text-black">
+                  <div className="mt-2 space-y-2 text-sm text-slate-100">
                     {["Sí", "No"].map((opt) => (
-                      <label key={opt} className="flex items-center gap-2 text-black">
+                      <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
                           name="antecedentesACVConvulsiones"
@@ -1000,16 +1081,16 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <p className="block text-sm font-medium text-black">
+                <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
+                  <p className="block text-sm font-medium text-slate-100">
                     ¿Posees un diagnóstico de demencia distinta a Alzheimer?
                   </p>
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-black">
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
                     {["Parkinson", "Demencia frontotemporal", "Demencia vascular", "No"].map(
                       (opt) => (
                         <label
                           key={opt}
-                          className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-black"
+                          className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 text-slate-100 border border-slate-800"
                         >
                           <input
                             type="checkbox"
@@ -1074,9 +1155,9 @@ export default function Home() {
                   </dl>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                  <p className="font-semibold mb-1">Privacidad y procesamiento seguro</p>
-                  <p>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
+                  <p className="font-semibold mb-1 text-slate-100">Privacidad y procesamiento seguro</p>
+                  <p className="text-slate-100">
                     Tus datos se convierten a un formato estructurado (compatible con FHIR), se
                     cifran en tu navegador y se procesan dentro de un enclave seguro
                     (confidential compute). Nadie del equipo ve tu información en texto plano.
