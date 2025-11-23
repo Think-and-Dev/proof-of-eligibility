@@ -1,0 +1,10 @@
+services:
+  eligibility-checker:
+    build: .
+    image: "docker.io/lucasmarctyd/eligibility-checker:latest" # Always provide FQDN image names!
+    platform: linux/amd64
+    ports:
+      - "3001:3001"
+    environment:
+      - PRIVATE_KEY_JWK=${PRIVATE_KEY_JWK}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}

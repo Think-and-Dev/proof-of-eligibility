@@ -1,0 +1,31 @@
+{
+  "name": "dwn-server-plugin",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "bash scripts/start-with-custom-plugin.sh",
+    "test:vc": "node scripts/test-vc-submit.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@filoz/synapse-sdk": "^0.36.0",
+    "@tbd54566975/dwn-sdk-js": "^0.5.2",
+    "@web5/api": "^0.12.0",
+    "@web5/crypto": "^1.0.6",
+    "@web5/dids": "^1.0.0",
+    "@web5/dwn-server": "^0.6.1",
+    "dotenv": "^17.2.3",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.0",
+    "@lit-protocol/lit-node-client": "^7.3.1",
+    "@lit-protocol/auth-helpers": "^8.1.1",
+    "ethers": "^6.15.0"
+  }
+}

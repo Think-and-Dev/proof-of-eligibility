@@ -1,0 +1,22 @@
+{
+    "name": "proof-of-eligibility",
+    "version": "1.0.0",
+    "description": "Servidor Express para evaluar elegibilidad dentro de un nodo TEE de Oasis",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "generate-key": "node src/generate-key.js",
+        "build-and-push": "./build-and-push.sh",
+        "oasis-build": "oasis rofl build",
+        "oasis-update": "oasis rofl update",
+        "oasis-deploy": "oasis rofl deploy",
+        "oasis-show": "oasis rofl show"
+    },
+    "dependencies": {
+        "@tbd54566975/dwn-sdk-js": "^0.5.2",
+        "@web5/dids": "^1.2.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^4.18.2"
+    }
+}
