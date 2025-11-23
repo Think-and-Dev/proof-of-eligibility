@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ScreeningFormData, SexoBiologico } from "./screeningTypes";
 import { useVCAuth } from "./VCAuthProvider";
 import { DarkCard, PrimaryButton, StepHeader } from "./ui";
+import { generateTrialFormVC, grantAccessToDid, writeVCToDwn } from "@/utils/did";
 
 const initialFormData: ScreeningFormData = {
   edad: null,
@@ -193,7 +194,7 @@ function buildFhirQuestionnaireResponse(formData: ScreeningFormData) {
 }
 
 export default function Home() {
-  const { user, loading, error, loginWithMockVC } = useVCAuth();
+  const { user, loading, error, loginWithMockVC, bearerDid } = useVCAuth();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<ScreeningFormData>(initialFormData);
   const [step1Error, setStep1Error] = useState<string | null>(null);
@@ -206,6 +207,7 @@ export default function Home() {
   const [confirming, setConfirming] = useState(false);
   const [vcResult, setVcResult] = useState<any | null>(null);
   const [vcError, setVcError] = useState<string | null>(null);
+  const [submittingVC, setSubmittingVC] = useState<boolean>(false);
 
   if (!user) {
     return (
@@ -228,7 +230,7 @@ export default function Home() {
                 Scan your Verified Credential to start the pre-screening.
 
 
-                
+
               </p>
               <p>
                 Your data stays private and is processed securely.
@@ -267,7 +269,7 @@ export default function Home() {
 
             {qrShown && (
               <div className="mt-4 space-y-4">
-                <div className="mx-auto w-52 h-52 rounded-2xl bg-slate-900/80 border border-sky-400/70 flex items-center justify-center cursor-pointer hover:border-sky-300 hover:bg-slate-800/80 transition-colors" 
+                <div className="mx-auto w-52 h-52 rounded-2xl bg-slate-900/80 border border-sky-400/70 flex items-center justify-center cursor-pointer hover:border-sky-300 hover:bg-slate-800/80 transition-colors"
                   onClick={async () => {
                     if (confirming || loading) return;
                     setConfirming(true);
@@ -281,7 +283,7 @@ export default function Home() {
                     style={{ backgroundImage: "url(/qr-demo.svg)" }}
                   >
                     <span className="text-[11px] font-medium tracking-wide text-slate-50/80 bg-black/40 px-2 py-1 rounded-full">
-                      
+
                     </span>
                   </div>
                 </div>
@@ -297,7 +299,7 @@ export default function Home() {
                   <span>Scan to authorize the connection.</span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      GDPR, HIPAA Compliance
+                    GDPR, HIPAA Compliance
                   </span>
                 </div>
               </div>
@@ -552,10 +554,31 @@ export default function Home() {
     setStep5Error(null);
     setVcError(null);
 
+    // Get user DID from the provider
+    let userDid = bearerDid;
+
+    if (!userDid) {
+      setVcError("No user DID available. Please select a user from the dropdown.");
+      return;
+    }
+
+    console.log("Using DID for submission:", userDid.uri);
+
+    // // give the tee procees permissions to read user's vcs from dwn
+    // await grantAccessToDid(userDid, process.env.NEXT_PUBLIC_TEE_PROCESS_DID || "", {
+    //   scope: {
+    //     method: 'RecordsRead',
+    //     schema: 'https://schema.org/VerifiableCredential',
+    //   },
+    // });
+
     const fhirPayload = buildFhirQuestionnaireResponse(formData);
 
+    // create a vc for the did with the fhir payload
+    const vc = await generateTrialFormVC(userDid, fhirPayload);
+
     try {
-      const encrypted = await encryptPayload(fhirPayload);
+      const encrypted = await encryptPayload({ vc, dwn: process.env.NEXT_PUBLIC_DWN_SERVER_URL || "" });
 
       const response = await fetch(EVALUATE_ELIGIBILITY_URL, {
         method: "POST",
@@ -580,8 +603,17 @@ export default function Home() {
       console.error("Error calling evaluateEligibility:", error);
       setVcError("Error calling evaluateEligibility. Check console for details.");
     }
-
+    setSubmittingVC(true);
     setSubmitted(true);
+    const bearerDidSigner = await userDid.getSigner();
+    try {
+      await writeVCToDwn(vc, process.env.NEXT_PUBLIC_DWN_SERVER_URL || "", bearerDidSigner, userDid.uri);
+    } catch (error) {
+      console.error("Error writing VC to DWN:", error);
+      setVcError("Error writing VC to DWN. Check console for details.");
+    } finally {
+      setSubmittingVC(false);
+    }
   };
 
   const getStepLabel = () => {
@@ -602,7 +634,6 @@ export default function Home() {
   };
 
   if (submitted) {
-    const fhirPayload = buildFhirQuestionnaireResponse(formData);
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
         <main className="w-full max-w-4xl">
@@ -660,9 +691,7 @@ export default function Home() {
                     <div className="flex gap-2">
                       <dt className="w-32 font-medium">Eligibility:</dt>
                       <dd>
-                        {vcResult.credentialSubject?.eligibilityResult ||
-                          vcResult.credentialSubject?.eligibilityStatus ||
-                          "Not available"}
+                        {vcResult.credentialSubject?.data?.eligibility ? "Eligible" : "Not eligible"}
                       </dd>
                     </div>
                     <div className="flex gap-2">
@@ -690,6 +719,18 @@ export default function Home() {
                   {vcError}
                 </p>
               )}
+              <div className="mt-4 text-sm">
+                {submittingVC && (
+                  <p className="text-xs text-slate-200/80">
+                    Submitting VC to DWN... This may take a few seconds.
+                  </p>
+                )}
+                {!submittingVC && (
+                  <p className="text-xs text-slate-200/80">
+                    VC submitted to DWN.
+                  </p>
+                )}
+              </div>
             </div>
           </DarkCard>
         </main>
