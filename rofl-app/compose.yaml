@@ -7,3 +7,5 @@ services:
       - "3001:3001"
     annotations:
       net.oasis.proxy.ports.3001.mode: terminate-tls
+    environment:
+      - PRIVATE_KEY_JWK=${PRIVATE_KEY_JWK}
