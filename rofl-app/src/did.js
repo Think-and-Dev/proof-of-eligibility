@@ -1,5 +1,6 @@
 const { DidKey, DidKeyUtils } = require('@web5/dids');
 const crypto = require('crypto');
+const { RecordsQuery, RecordsWrite } = require('@tbd54566975/dwn-sdk-js');
 
 
 /**
@@ -183,13 +184,13 @@ async function generateAndPrintPrivateKeyJwk() {
  * });
  * ```
  */
-async function generateEligibilityVC(did, eligibility, options = {}) {
+async function generateEligibilityVC(did, eligibility, targetDid, options = {}) {
     if (!did || !did.uri) {
         throw new Error('A valid BearerDid object is required');
     }
 
     const {
-        credentialSubjectId = did.uri,
+        credentialSubjectId = targetDid,
         credentialSubject = {},
         credentialId = `urn:uuid:${crypto.randomUUID()}`,
         expirationDate
@@ -205,6 +206,7 @@ async function generateEligibilityVC(did, eligibility, options = {}) {
         type: ['VerifiableCredential', 'ProofOfEligibility'],
         issuer: did.uri,
         issuanceDate: new Date().toISOString(),
+        recipient: targetDid,
         credentialSubject: {
             id: credentialSubjectId,
             type: 'ProofOfEligibility',
@@ -264,9 +266,214 @@ async function generateEligibilityVC(did, eligibility, options = {}) {
     return vc;
 }
 
+
+/**
+ * Validates a Verifiable Credential (VC) and extracts the FHIR payload
+ * @param {Object} vc - The Verifiable Credential to validate
+ * @returns {Object} - The FHIR payload from credentialSubject.data
+ * @throws {Error} - If the VC is invalid
+ */
+async function validateAndExtractVC(vc) {
+    // 1. Validate VC structure
+    if (!vc || typeof vc !== 'object') {
+        throw new Error('VC must be a valid object');
+    }
+
+    if (!vc['@context'] || !Array.isArray(vc['@context'])) {
+        throw new Error('VC must have @context array');
+    }
+
+    if (!vc.type || !Array.isArray(vc.type) || !vc.type.includes('VerifiableCredential')) {
+        throw new Error('VC must have type array containing VerifiableCredential');
+    }
+
+    if (!vc.issuer || typeof vc.issuer !== 'string') {
+        throw new Error('VC must have a valid issuer DID');
+    }
+
+    if (!vc.credentialSubject || typeof vc.credentialSubject !== 'object') {
+        throw new Error('VC must have a valid credentialSubject');
+    }
+
+    if (!vc.proof || typeof vc.proof !== 'object') {
+        throw new Error('VC must have a proof object');
+    }
+
+    // 2. Verify the signature
+    // Resolve the issuer DID to get the public key
+    const issuerDid = vc.issuer;
+    const resolutionResult = await DidKey.resolve(issuerDid);
+
+    if (!resolutionResult.didDocument) {
+        throw new Error(`Could not resolve issuer DID: ${issuerDid}`);
+    }
+
+    // Get the verification method from the proof
+    const proof = vc.proof;
+    const verificationMethod = proof.verificationMethod;
+
+    if (!verificationMethod) {
+        throw new Error('Proof must have verificationMethod');
+    }
+
+    // Find the verification method in the DID document
+    const verificationMethods = resolutionResult.didDocument.verificationMethod || [];
+    const vm = verificationMethods.find(vm => vm.id === verificationMethod || vm.id.endsWith(verificationMethod.split('#')[1]));
+
+    if (!vm) {
+        throw new Error(`Verification method ${verificationMethod} not found in DID document`);
+    }
+
+    // 3. Verify the signature
+    // Recreate the canonical VC (without proof) for verification
+    const vcForVerification = JSON.parse(JSON.stringify(vc));
+    delete vcForVerification.proof;
+
+    // Sort keys for consistent canonicalization (same as in generation)
+    const sortedVC = {};
+    const keys = Object.keys(vcForVerification).sort();
+    for (const key of keys) {
+        sortedVC[key] = vcForVerification[key];
+    }
+
+    const canonicalVC = JSON.stringify(sortedVC);
+    const vcBytes = Buffer.from(canonicalVC, 'utf8');
+
+    // Decode the signature from base64url
+    const signatureBase64Url = proof.proofValue;
+    const signature = Buffer.from(
+        signatureBase64Url.replace(/-/g, '+').replace(/_/g, '/'),
+        'base64'
+    );
+
+    // Get the public key from the verification method
+    const publicKeyJwk = vm.publicKeyJwk;
+    if (!publicKeyJwk || publicKeyJwk.crv !== 'Ed25519') {
+        throw new Error('Unsupported key type. Only Ed25519 is supported.');
+    }
+
+    // Import the public key and verify using Web Crypto API (available in Node.js 15+)
+    const publicKeyBytes = Buffer.from(publicKeyJwk.x, 'base64url');
+
+    // Use Web Crypto API for Ed25519 verification
+    const webCrypto = crypto.webcrypto || require('crypto').webcrypto;
+    if (!webCrypto) {
+        throw new Error('Web Crypto API not available. Node.js 15+ required.');
+    }
+
+    const cryptoKey = await webCrypto.subtle.importKey(
+        'raw',
+        publicKeyBytes,
+        { name: 'Ed25519' },
+        false,
+        ['verify']
+    );
+
+    const isValid = await webCrypto.subtle.verify(
+        'Ed25519',
+        cryptoKey,
+        signature,
+        vcBytes
+    );
+
+    if (!isValid) {
+        throw new Error('VC signature verification failed');
+    }
+
+    // 4. Extract FHIR payload from credentialSubject.data
+    if (!vc.credentialSubject.data) {
+        throw new Error('VC credentialSubject must have data field containing FHIR payload');
+    }
+
+    const fhirPayload = vc.credentialSubject.data;
+
+    // Validate that it looks like a FHIR QuestionnaireResponse
+    if (!fhirPayload || typeof fhirPayload !== 'object') {
+        throw new Error('FHIR payload must be a valid object');
+    }
+
+    if (fhirPayload.resourceType !== 'QuestionnaireResponse') {
+        throw new Error('FHIR payload must be a QuestionnaireResponse');
+    }
+
+    console.log('✅ VC validated successfully');
+    console.log('✅ FHIR payload extracted:', fhirPayload.resourceType);
+
+    return { fhirPayload, vc };
+}
+
+async function writeVCToDwn(vc, dwn, bearerDidSigner, targetDid) {
+    // Adaptar el signer de @web5/dids al formato que espera @tbd54566975/dwn-sdk-js
+    // El SDK de DWN espera: sign(content: Uint8Array) => Promise<Uint8Array>
+    // Pero @web5/dids tiene: sign({ data: Uint8Array }) => Promise<Uint8Array>
+    const signer = {
+        keyId: bearerDidSigner.keyId,
+        algorithm: bearerDidSigner.algorithm,
+        sign: async (content) => {
+            return await bearerDidSigner.sign({ data: content });
+        }
+    };
+    console.log('   ✅ Signer obtenido y adaptado\n');
+
+    const vcJson = JSON.stringify(vc);
+    const vcBytes = new TextEncoder().encode(vcJson);
+
+    // 4. Crear el mensaje RecordsWrite
+    console.log('4️⃣ Creando mensaje RecordsWrite...');
+    const recordsWrite = await RecordsWrite.create({
+        data: vcBytes,
+        dataFormat: 'application/json',
+        schema: 'https://schema.org/VerifiableCredential',
+        signer: signer,
+        recipient: targetDid,
+    });
+    console.log('   ✅ Mensaje RecordsWrite creado\n');
+
+    // 5. Enviar el mensaje al servidor DWN usando dwn.processMessage
+    console.log('5️⃣ Enviando VC al servidor DWN...');
+    const jsonRpcRequest = {
+        jsonrpc: '2.0',
+        method: 'dwn.processMessage',
+        params: {
+            target: targetDid,
+            message: recordsWrite.toJSON(),
+        },
+        id: crypto.randomUUID(),
+    };
+    console.log("executing request", jsonRpcRequest);
+
+    const response = await fetch(dwn, {
+        method: 'POST',
+        headers: {
+            'dwn-request': JSON.stringify(jsonRpcRequest),
+            'content-type': 'application/octet-stream',
+        },
+        body: Buffer.from(vcBytes),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.error) {
+        throw new Error(`JSON-RPC error: ${result.error.message || JSON.stringify(result.error)}`);
+    }
+
+    console.log(`   ✅ VC escrita exitosamente!`);
+    console.log(`   📝 Status: ${result.result?.reply?.status?.code || 'N/A'}`);
+    const recordId = recordsWrite.message.recordId;
+    console.log(`   📝 Record ID: ${recordId}`);
+    console.log(`   🔗 URL: ${dwn}\n`);
+}
+
 module.exports = {
     getDid,
     generateEligibilityVC,
     generatePrivateKeyJwk,
-    generateAndPrintPrivateKeyJwk
+    generateAndPrintPrivateKeyJwk,
+    getDidVcsFromDwn,
+    validateAndExtractVC,
+    writeVCToDwn
 };

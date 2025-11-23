@@ -5,7 +5,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 require('dotenv').config();
 const evaluateEligibility = require('./evaluate_eligibility');
-const { getDid, generateEligibilityVC } = require('./did');
+const { getDid, generateEligibilityVC, getDidVcsFromDwn, validateAndExtractVC, writeVCToDwn } = require('./did');
 
 // --- Servidor Express ---
 
@@ -80,6 +80,7 @@ app.post('/evaluateEligibility', async (req, res) => {
 
     const input = decryptPayload(encrypted);
     console.log('Decrypted payload:', input);
+
     // Validar que el body tenga los campos necesarios
     if (!input || typeof input !== 'object') {
       return res.status(400).json({
@@ -87,7 +88,15 @@ app.post('/evaluateEligibility', async (req, res) => {
       });
     }
 
-    const eligibility = evaluateEligibility(input);
+    // Validate the VC and extract FHIR payload
+    let { fhirPayload, vc: receivedVC } = await validateAndExtractVC(input.vc);
+
+    console.log('✅ VC validated and FHIR payload extracted');
+    console.log('✅ VC:', receivedVC);
+    console.log('✅ FHIR payload:', fhirPayload);
+
+    // Evaluate eligibility using the FHIR payload
+    const eligibility = evaluateEligibility(fhirPayload);
 
     console.log('Eligibility:', eligibility);
 
@@ -95,8 +104,10 @@ app.post('/evaluateEligibility', async (req, res) => {
 
     console.log('Local DID:', localDid.uri);
 
-    const vc = await generateEligibilityVC(localDid, eligibility);
-
+    const vc = await generateEligibilityVC(localDid, eligibility, receivedVC.credentialSubject.id);
+    // const bearerDidSigner = await localDid.getSigner();
+    // TODO: we need write permission on the dwn to write the vc
+    // await writeVCToDwn(vc, input.dwn, bearerDidSigner, receivedVC.credentialSubject.id);
     res.json(vc);
     console.log('Eligibility VC generated:', vc);
   } catch (error) {
