@@ -15,6 +15,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@decentralized-identity/ion-tools": "^1.1.4",
     "@filoz/synapse-sdk": "^0.36.0",
     "@tbd54566975/dwn-sdk-js": "^0.5.2",
     "@web5/api": "^0.12.0",
