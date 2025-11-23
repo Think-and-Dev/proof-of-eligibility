@@ -69,6 +69,67 @@ function decryptPayload(encrypted) {
   return JSON.parse(asString);
 }
 
+app.post('/evaluateEligibility/batch', async (req, res) => {
+  try {
+    console.log('Evaluating eligibility batch...');
+    const encrypted = req.body;
+    console.log('Received encrypted payload:', encrypted);
+
+    // const input = decryptPayload(encrypted);
+    const input = encrypted;
+    console.log('Decrypted payload:', input);
+    // Validar que el body tenga los campos necesarios
+    if (!input || typeof input !== 'object') {
+      return res.status(400).json({
+        error: 'Request body must be a valid JSON object'
+      });
+    }
+    if (!Array.isArray(input.items)) {
+      return res.status(400).json({
+        error: 'Request body must contain an array of items'
+      });
+    }
+
+    const results = [];
+    for (const item of input.items) {
+      itemDid = item.did;
+      if (!itemDid) {
+        return res.status(400).json({
+          error: 'Each item must contain a did'
+        });
+      }
+      itemDwn = item.dwn;
+      if (!itemDwn) {
+        return res.status(400).json({
+          error: 'Each item must contain a dwn'
+        });
+      }
+      // access the dwn with the dwn id
+      const vcs = await getDidVcsFromDwn(item);
+      if (!vcs || vcs.length === 0) {
+        return res.status(400).json({
+          error: 'Each item must contain a dwn that has vcs'
+        });
+      }
+
+      const localDid = await getDid();
+      if (itemDid !== localDid.uri) {
+        return res.status(400).json({
+          error: 'Each item must contain a did that matches the local did'
+        });
+      }
+      const eligibility = evaluateEligibility(item);
+      results.push(eligibility);
+    }
+    res.json(results);
+    console.log('Eligibility batch evaluated:', results);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Error processing request',
+      message: error.message
+    });
+  }
+});
 // Endpoint POST para evaluar elegibilidad
 app.post('/evaluateEligibility', async (req, res) => {
   try {

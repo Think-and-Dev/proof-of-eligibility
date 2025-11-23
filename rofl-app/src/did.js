@@ -266,6 +266,138 @@ async function generateEligibilityVC(did, eligibility, targetDid, options = {}) 
     return vc;
 }
 
+/**
+ * Gets the Verifiable Credentials (VCs) from a DWN item
+ * 
+ * This function queries the DWN for all VCs that were issued FOR a specific patient DID.
+ * It filters VCs where credentialSubject.id matches the patient DID.
+ * 
+ * The function uses RecordsQuery with filters for:
+ * - recipient: The DID that can read the records (works if VC was written with recipient: patientDid)
+ * - schema: Filters for VerifiableCredential schema
+ * - dataFormat: Ensures JSON format
+ * 
+ * Then it validates in code that credentialSubject.id === patientDid to ensure
+ * the VC was issued FOR this specific patient (not just accessible by them).
+ * 
+ * @param {Object} item - The item object containing the dwn and did
+ * @param {string} item.dwn - The DWN server URL
+ * @param {string} item.did - The patient DID to query VCs for (must match credentialSubject.id)
+ * @returns {Promise<Array>} An array of Verifiable Credentials (VCs) issued FOR this patient
+ */
+async function getDidVcsFromDwn(item) {
+    const { dwn, did } = item;
+    const vcs = [];
+
+    try {
+        const localDid = await getDid();
+        const bearerDidSigner = await localDid.getSigner();
+        const signer = {
+            keyId: bearerDidSigner.keyId,
+            algorithm: bearerDidSigner.algorithm,
+            sign: async (content) => {
+                return await bearerDidSigner.sign({ data: content });
+            }
+        };
+
+        // Use RecordsQuery to get multiple VCs
+        // Filter by:
+        // - recipient: The DID that can read the records (VCs issued TO this DID)
+        //   This works if the VC was written with recipient: patientDid
+        //   If recipient is not set, we'll still get results and filter in code
+        // - schema: Filter for VerifiableCredential schema
+        // - dataFormat: Ensure JSON format
+        // Note: We'll also filter by credentialSubject.id in code to ensure we get
+        // only VCs issued FOR this specific patient DID (the subject of the credential)
+        const recordsQuery = await RecordsQuery.create({
+            filter: {
+                recipient: did, // Filter by recipient if VCs were written with recipient: patientDid
+                schema: 'https://schema.org/VerifiableCredential',
+                dataFormat: 'application/json',
+            },
+            signer: signer,
+        });
+
+        console.log("recordsQuery: ", recordsQuery.toJSON());
+
+        const queryRequest = {
+            jsonrpc: '2.0',
+            method: 'dwn.processMessage',
+            params: {
+                target: did,
+                message: recordsQuery.toJSON(),
+            },
+            id: crypto.randomUUID(),
+        };
+
+        console.log("queryRequest: ", queryRequest);
+
+        const queryResponse = await fetch(dwn, {
+            method: 'POST',
+            headers: {
+                'dwn-request': JSON.stringify(queryRequest),
+            },
+        });
+
+        console.log("queryResponse status: ", queryResponse.status);
+
+        if (!queryResponse.ok) {
+            throw new Error(`HTTP error! status: ${queryResponse.status}`);
+        }
+
+        const queryResult = await queryResponse.json();
+
+        if (queryResult.error) {
+            throw new Error(`DWN error: ${queryResult.error.message || JSON.stringify(queryResult.error)}`);
+        }
+
+        // RecordsQuery returns entries array
+        const entries = queryResult.result?.reply?.entries || [];
+
+        console.log(`   ✅ Found ${entries.length} VC record(s)`);
+
+        // Process each entry to extract the VC data
+        for (const entry of entries) {
+            try {
+                let vcData = null;
+
+                // Check if data is encoded in the entry
+                if (entry.encodedData) {
+                    // Data is already encoded in the entry
+                    vcData = JSON.parse(Buffer.from(entry.encodedData, 'base64').toString('utf-8'));
+                } else if (entry.recordsWrite?.descriptor?.dataCid) {
+                    // Data needs to be fetched separately (for larger records)
+                    // For now, we'll need to make a RecordsRead for this specific recordId
+                    console.log(`   ⚠️  Record ${entry.recordId} has data stored separately, skipping for now`);
+                    continue;
+                }
+
+                if (vcData) {
+                    // Filter by credentialSubject.id to ensure this VC was issued FOR this patient
+                    // This is the DID of the patient (the subject of the credential)
+                    const credentialSubjectId = vcData.credentialSubject?.id;
+
+                    if (credentialSubjectId === did) {
+                        console.log(`   ✅ VC parsed and verified for patient: ${vcData.id || 'no-id'}`);
+                        vcs.push(vcData);
+                    } else {
+                        console.log(`   ⚠️  VC skipped - credentialSubject.id (${credentialSubjectId}) does not match patient DID (${did})`);
+                    }
+                }
+            } catch (parseError) {
+                console.error(`   ⚠️  Error parsing VC from entry: ${parseError.message}`);
+            }
+        }
+
+        console.log(`   ✅ Total VCs retrieved: ${vcs.length}`);
+        return vcs;
+
+    } catch (error) {
+        console.error(`   ❌ Error querying VCs from DWN: ${error.message}`);
+        console.error(error);
+        throw error;
+    }
+}
 
 /**
  * Validates a Verifiable Credential (VC) and extracts the FHIR payload
