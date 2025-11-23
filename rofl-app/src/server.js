@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', "dwn-request"],
 }));
 
 // Middleware para parsear JSON

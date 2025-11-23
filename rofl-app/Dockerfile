@@ -2,16 +2,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar package.json e instalar dependencias
+# Copy package.json and install dependencies
 COPY package.json /app/
 RUN npm install
 
-# Copiar el código fuente
+# Copy the source code
 COPY src/ /app/src/
 
-# Exponer el puerto
+# Expose the port
 EXPOSE 3001
 
-# Punto de entrada: ejecuta el servidor Express
-CMD ["node", "src/evaluate_eligibility.js"]
+# Entry point: run the Express server
+CMD ["node", "src/server.js"]
 

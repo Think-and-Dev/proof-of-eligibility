@@ -32,14 +32,19 @@ deployments:
           min_tcb_evaluation_data_number: 18
           tdx: {}
       enclaves:
-        - id: NQRyq/+d7Iqyn9v91n5G9fxF7CWlMgYG1CrDjwFRuocAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-        - id: HYPa6SIZiTylBdMjTzsmu6RUepwGizHig/xoCg96dQ0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: Tzj2bo19cMO9A7QJ+7DF3gv2dvXl6F1wcMZXK5eBL6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+        - id: u6ZoHGmVq91vWnRlSui4ZSMFwElzjcR6iHUUHw07P9UAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
       endorsements:
         - any: {}
       fees: endorsing_node
       max_expiration: 3
+    secrets:
+      - name: ENCRYPTION_KEY
+        value: pGJwa1ggrxGVNcnP+paLDLfaPk5GH9qiOb6ZeIFmP31PhordljVkbmFtZVgeadGRlBEydI4+67oOYe7ACjLpA61QA/J6T0FQN7BoZW5vbmNlT3Fp6m3p9r2j1pxGd832J2V2YWx1ZVg80s+jABPcvilIJbruHHyZkn06wWewLvjokZmV4sFk0024P9cq6M1pk3Zg4n63RrFcAiK3aXXl48N9O0Ej
+      - name: PRIVATE_KEY_JWK
+        value: pGJwa1ggmMLEQwgdCdc+ZB6wi2DZQvc/KhPPIXKi7LUpKVOc2gpkbmFtZVgf2zsV2qhUvDUPenOGpI2ieG0XKbbn9awiA+IIm7BQx2Vub25jZU+KOsdLTWpOhxfO/Xr7EFhldmFsdWVYvcMl2rlDFWOPvSaxCAbSLg7fmZh4LM/+U1SCdaLq9hegJlU+RL32VbTutWdCM38LWkjpnSufHKLP3EsIrA1vRfEOOgtrIumkTKf7YCfmts3kj5Xt95I937N85KNv/jfBDX0mcGnF9lILESU1Zt7u49fd+PIUNqPG3g0O7SKu+eXuMIVkHl2mYxCzTTT8MSN53Tz/VRTI5otjSuaZNTIosyCdAejVja0I3wRAz+bfjehWU+z6tLi9xrqqbzFyQg==
     machines:
       default:
         provider: oasis1qp2ens0hsp7gh23wajxa4hpetkdek3swyyulyrmz
         offer: playground_short
-        id: "0000000000000450"
+        id: "0000000000000473"

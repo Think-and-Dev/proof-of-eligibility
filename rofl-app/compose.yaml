@@ -1,11 +1,10 @@
 services:
   eligibility-checker:
     build: .
-    image: "docker.io/lucasmarctyd/eligibility-checker@sha256:22d4d7c96fb54e8041ba5bc6ee3254ad0bc64dd9d1af8e2886efa1e68ba33693" # Always provide FQDN image names!
+    image: "docker.io/lucasmarctyd/eligibility-checker:latest" # Always provide FQDN image names!
     platform: linux/amd64
     ports:
       - "3001:3001"
-    annotations:
-      net.oasis.proxy.ports.3001.mode: terminate-tls
     environment:
       - PRIVATE_KEY_JWK=${PRIVATE_KEY_JWK}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
