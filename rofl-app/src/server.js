@@ -100,57 +100,6 @@ app.post('/evaluateEligibility', (req, res) => {
   }
 });
 
-async function resolveDid(did) {
-  const resolvedDid = did || 'did:example:patient-123456789abcdef';
-  const dwnEndpoint = process.env.MOCK_DWN_ENDPOINT || 'https://mock-dwn.local';
-
-  return {
-    did: resolvedDid,
-    services: [
-      {
-        id: '#dwn',
-        type: 'DecentralizedWebNode',
-        serviceEndpoint: dwnEndpoint,
-      },
-    ],
-  };
-}
-
-async function fetchVcFromDwn(didDocument) {
-  const dwnService = (didDocument.services || []).find(
-    (s) => s.type === 'DecentralizedWebNode'
-  );
-
-  return {
-    vcId: 'vc-mock-eligibility-001',
-    subjectDid: didDocument.did,
-    dwnEndpoint: dwnService ? dwnService.serviceEndpoint : null,
-    status: 'Pending Evaluation',
-  };
-}
-
-app.post('/did-login', async (req, res) => {
-  try {
-    const { did } = req.body || {};
-
-    const didDocument = await resolveDid(did);
-    const vc = await fetchVcFromDwn(didDocument);
-
-    res.json({
-      ok: true,
-      did: didDocument.did,
-      dwnEndpoint: vc.dwnEndpoint,
-      vc,
-    });
-  } catch (error) {
-    res.status(500).json({
-      ok: false,
-      error: 'Error in did-login',
-      message: error.message,
-    });
-  }
-});
-
 // Health endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
