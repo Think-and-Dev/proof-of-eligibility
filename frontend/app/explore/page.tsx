@@ -21,11 +21,17 @@ type ExploreMapProps = {
   patients: Patient[];
   showHospitals: boolean;
   onSelectPatient: (id: string) => void;
+  onClusterPatientsSelected?: (patients: Patient[]) => void;
 };
 
-function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProps) {
+function ExploreMap({ patients, showHospitals, onSelectPatient, onClusterPatientsSelected }: ExploreMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const patientsRef = useRef<Patient[]>([]);
+
+  useEffect(() => {
+    patientsRef.current = patients;
+  }, [patients]);
 
   useEffect(() => {
     if (!mapboxgl.accessToken) return;
@@ -255,6 +261,10 @@ function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProp
           type: "Feature" as const,
           properties: {
             estado: p.estadoPaciente,
+            id: p.id,
+            edad: p.edad,
+            diagnosticoPrevio: p.diagnosticoPrevio,
+            sintomaPrincipal: p.sintomaPrincipal,
           },
           geometry: {
             type: "Point" as const,
@@ -288,6 +298,50 @@ function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProp
       map.once("load", onLoad);
     }
   }, [patients]);
+
+  // Click en clústeres para obtener los pacientes asociados
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleClick = (e: mapboxgl.MapMouseEvent) => {
+      if (!onClusterPatientsSelected) return;
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["patients-clusters"],
+      });
+
+      if (!features.length) return;
+
+      const clusterFeature = features[0];
+      const clusterId = (clusterFeature.properties as any)?.cluster_id;
+      if (clusterId === undefined || clusterId === null) return;
+
+      const source = map.getSource("patients-heatmap-source") as any;
+      if (!source || typeof source.getClusterLeaves !== "function") return;
+
+      source.getClusterLeaves(clusterId, 1000, 0, (err: any, leafFeatures: any[]) => {
+        if (err || !Array.isArray(leafFeatures)) return;
+
+        const ids = leafFeatures
+          .map((f) => (f.properties as any)?.id as string | undefined)
+          .filter((id): id is string => Boolean(id));
+
+        const uniqueIds = Array.from(new Set(ids));
+        const selectedPatients = patientsRef.current.filter((p) =>
+          uniqueIds.includes(p.id)
+        );
+
+        onClusterPatientsSelected(selectedPatients);
+      });
+    };
+
+    map.on("click", "patients-clusters", handleClick);
+
+    return () => {
+      map.off("click", "patients-clusters", handleClick);
+    };
+  }, [onClusterPatientsSelected]);
 
   const hasToken = Boolean(mapboxgl.accessToken);
 
@@ -920,6 +974,12 @@ export default function ExplorePage() {
   const [diagnosis, setDiagnosis] = useState<string>("");
   const [symptom, setSymptom] = useState<string>("");
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [clusterPatients, setClusterPatients] = useState<Patient[] | null>(null);
+  const [showFiltersPanel, setShowFiltersPanel] = useState<boolean>(true);
+  const [showPatientsPanel, setShowPatientsPanel] = useState<boolean>(true);
+  const [filtersWidth, setFiltersWidth] = useState<number>(240);
+  const [patientsWidth, setPatientsWidth] = useState<number>(340);
+  const [dragging, setDragging] = useState<null | "filters" | "patients">(null);
 
   useEffect(() => {
     fetchPatientsFromBackend().then(setPatients).catch(() => {
@@ -945,13 +1005,115 @@ export default function ExplorePage() {
 
   const totalResults = filteredPatients.length;
 
+  const clusterSummary = useMemo(() => {
+    if (!clusterPatients || clusterPatients.length === 0) return null;
+
+    const total = clusterPatients.length;
+
+    const ageBuckets: { label: string; count: number }[] = [
+      { label: "<60", count: 0 },
+      { label: "60-69", count: 0 },
+      { label: "70+", count: 0 },
+    ];
+
+    const statusCounts: Record<Patient["estadoPaciente"], number> = {
+      Eligible: 0,
+      "To review": 0,
+      "Not eligible": 0,
+    };
+
+    const diagnosisCounts: Record<string, number> = {};
+    const symptomCounts: Record<string, number> = {};
+
+    for (const p of clusterPatients) {
+      if (p.edad < 60) ageBuckets[0].count++;
+      else if (p.edad < 70) ageBuckets[1].count++;
+      else ageBuckets[2].count++;
+
+      statusCounts[p.estadoPaciente]++;
+
+      diagnosisCounts[p.diagnosticoPrevio] = (diagnosisCounts[p.diagnosticoPrevio] || 0) + 1;
+      symptomCounts[p.sintomaPrincipal] = (symptomCounts[p.sintomaPrincipal] || 0) + 1;
+    }
+
+    const toPercent = (n: number) => (total ? Math.round((n / total) * 100) : 0);
+
+    const statusPercentages = {
+      Eligible: toPercent(statusCounts["Eligible"]),
+      ToReview: toPercent(statusCounts["To review"]),
+      NotEligible: toPercent(statusCounts["Not eligible"]),
+    };
+
+    const topDiagnoses = Object.entries(diagnosisCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, count]) => ({ label, count, percent: toPercent(count) }));
+
+    const topSymptoms = Object.entries(symptomCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([label, count]) => ({ label, count, percent: toPercent(count) }));
+
+    return {
+      total,
+      ageBuckets,
+      statusPercentages,
+      topDiagnoses,
+      topSymptoms,
+    };
+  }, [clusterPatients]);
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMove = (e: MouseEvent) => {
+      if (dragging === "filters") {
+        let next = e.clientX;
+        // Límites razonables para la columna de filtros
+        next = Math.max(180, Math.min(next, 420));
+        setFiltersWidth(next);
+      } else if (dragging === "patients") {
+        const leftEdge = filtersWidth;
+        let next = e.clientX - leftEdge;
+        // Límites razonables para la columna de pacientes
+        next = Math.max(220, Math.min(next, 520));
+        setPatientsWidth(next);
+      }
+    };
+
+    const handleUp = () => {
+      setDragging(null);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [dragging, filtersWidth]);
+
   return (
     <div className="h-screen bg-slate-950 flex text-slate-50">
       {/* Columna izquierda: filtros */}
-      <section className="w-[15%] h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm resize-x cursor-col-resize min-w-[180px] max-w-[40%]">
-        <h2 className="text-base font-semibold text-slate-50 mb-3">Clinical filters</h2>
+      <section
+        className="relative h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm min-w-[160px]"
+        style={{ width: filtersWidth }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-slate-50">Clinical filters</h2>
+          <button
+            type="button"
+            onClick={() => setShowFiltersPanel((open) => !open)}
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {showFiltersPanel ? "Hide" : "Show"}
+          </button>
+        </div>
 
-        <div className="space-y-4">
+        {showFiltersPanel && (
+          <div className="space-y-4">
           <div className="flex items-center gap-2 text-xs text-slate-200">
             <input
               id="toggle-hospitals"
@@ -1071,62 +1233,505 @@ export default function ExplorePage() {
             These filters are an initial scheme based on clinical pre-screening. Later they will be
             connected to real patient data.
           </p>
-        </div>
+          </div>
+        )}
+
+        {/* Handle de resize para filtros */}
+        <div
+          className="absolute top-0 right-0 h-full w-1 cursor-col-resize bg-slate-800/40 hover:bg-sky-500/60 transition-colors"
+          onMouseDown={() => setDragging("filters")}
+        />
       </section>
 
       {/* Columna central: resultados */}
-      <section className="w-[22%] h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm flex flex-col resize-x cursor-col-resize min-w-[220px] max-w-[45%]" id="explore-patient-list">
+      <section
+        className="relative h-full border-r border-slate-800 bg-slate-950/80 overflow-y-auto p-4 text-sm flex flex-col min-w-[220px]"
+        style={{ width: patientsWidth }}
+        id="explore-patient-list"
+      >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-50">Matched patients</h2>
-          <span className="text-xs text-slate-400">{totalResults} results</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">{totalResults} results</span>
+            <button
+              type="button"
+              onClick={() => setShowPatientsPanel((open) => !open)}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              {showPatientsPanel ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-          {filteredPatients.map((p) => (
-            <article
-              key={p.id}
-              data-patient-id={p.id}
-              className={`border rounded-lg p-3 bg-slate-950/80 hover:border-sky-500 hover:bg-slate-900/80 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] transition-colors cursor-pointer text-sm ${
-                selectedPatientId === p.id ? "border-sky-500 shadow-[0_0_20px_rgba(56,189,248,0.35)]" : "border-slate-800"
-              }`}
-              onClick={() => setSelectedPatientId(p.id)}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-slate-50 text-sm">
-                  {p.nombre} <span className="text-xs text-slate-400">({p.id})</span>
-                </h3>
-                {p.estadoPaciente === "Eligible" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-emerald-500/10 border-emerald-400/60 text-emerald-300">
-                    Eligible
-                  </span>
+        {showPatientsPanel && (
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+          {filteredPatients.map((p) => {
+            const pseudoId = `SCR-${p.id}`;
+
+            const mocaScore =
+              p.estadoPaciente === "Eligible"
+                ? "26/30"
+                : p.estadoPaciente === "To review"
+                ? "23/30"
+                : "—";
+
+            const eligibilityReasons =
+              p.estadoPaciente === "Eligible"
+                ? ["Within target age range.", "No excluding comorbidities."]
+                : p.estadoPaciente === "To review"
+                ? ["Check comorbidities and cognitive score."]
+                : [
+                    "Does not meet inclusion criteria or presents exclusion criteria.",
+                  ];
+
+            const phase =
+              p.estudioClinico.startsWith("Alzheimer-") ||
+              p.estudioClinico.startsWith("Cancer de mama-")
+                ? "III"
+                : "II";
+
+            const target =
+              p.estudioClinico.startsWith("Alzheimer-Aducanumab")
+                ? "Alzheimer leve"
+                : p.estudioClinico.startsWith("Alzheimer-Lecanemab")
+                ? "MCI / Alzheimer temprano"
+                : p.estudioClinico.startsWith("Parkinson-Prasinezumab")
+                ? "Parkinson temprano"
+                : p.estudioClinico.startsWith("Parkinson-Tavapadon")
+                ? "Parkinson leve-moderado"
+                : "HER2+ cáncer de mama";
+
+            const cidFilecoin = `bafy-${p.id.toLowerCase()}`;
+            const inputHash = `0x${p.id.replace(/[^0-9]/g, "").padEnd(8, "0")}`;
+            const engineVersion = "v1.3.2";
+            const engineHash = "0x9f3a21";
+
+            const isSelected = selectedPatientId === p.id;
+
+            return (
+              <article
+                key={p.id}
+                data-patient-id={p.id}
+                className={`border rounded-lg p-3 bg-slate-950/80 hover:border-sky-500 hover:bg-slate-900/80 hover:shadow-[0_0_18px_rgba(56,189,248,0.25)] transition-colors cursor-pointer text-sm ${
+                  isSelected
+                    ? "border-sky-500 shadow-[0_0_20px_rgba(56,189,248,0.35)]"
+                    : "border-slate-800"
+                }`}
+                onClick={() => setSelectedPatientId(p.id)}
+              >
+                <div className="flex items-start justify-between mb-1 gap-2">
+                  <div>
+                    <h3 className="font-semibold text-slate-50 text-sm flex items-center gap-1">
+                      <span>
+                        {p.nombre}{" "}
+                        <span className="text-xs text-slate-400">({p.id})</span>
+                      </span>
+                      <p> </p>
+                      <a
+                        href="https://pdp.vxb.ai/calibration/piece/bafkzcibdyubqmnekk4hyv2cwl6qwckuidym3cx5ru2mkjtqkdfuolvuiwkbli3yw"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center"
+                      >
+                        <img
+                          src="/filecoin.png"
+                          alt="Filecoin"
+                          className="w-4 h-4"
+                        />
+                      </a>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Pseudo-ID: <span className="font-medium">{pseudoId}</span>
+                    </p>
+                  </div>
+                  {p.estadoPaciente === "Eligible" && (
+                    <span className="text-[11px] px-2 py-1 rounded-full border bg-emerald-500/10 border-emerald-400/60 text-emerald-300 whitespace-nowrap">
+                      Eligible
+                    </span>
+                  )}
+                  {p.estadoPaciente === "To review" && (
+                    <span className="text-[11px] px-2 py-1 rounded-full border bg-amber-500/10 border-amber-400/60 text-amber-300 whitespace-nowrap">
+                      To review
+                    </span>
+                  )}
+                  {p.estadoPaciente === "Not eligible" && (
+                    <span className="text-[11px] px-2 py-1 rounded-full border bg-rose-500/10 border-rose-400/60 text-rose-300 whitespace-nowrap">
+                      Not eligible
+                    </span>
+                  )}
+                </div>
+                {/* Resumen clínico mínimo siempre visible */}
+                <div className="mt-1 text-xs text-slate-300">
+                  <p>
+                    Age: <span className="font-medium">{p.edad}</span> · Previous
+                    diagnosis:
+                    <span className="font-medium"> {p.diagnosticoPrevio}</span>
+                  </p>
+                  <p>Symptoms: {p.sintomaPrincipal}</p>
+                </div>
+
+                {/* Detalle expandido solo cuando la card está seleccionada */}
+                {isSelected && (
+                  <>
+                    {/* Clinical data */}
+                    <div className="mt-2 mb-2 rounded-md bg-slate-900/80 border border-slate-800 px-2 py-2">
+                      <p className="text-xs text-slate-300">
+                        MoCA: <span className="font-medium">{mocaScore}</span>
+                      </p>
+                      <div className="mt-1">
+                        <p className="text-[11px] text-slate-400">
+                          Eligibility reason:
+                        </p>
+                        <ul className="list-disc ml-4 mt-0.5 space-y-0.5">
+                          {eligibilityReasons.map((r) => (
+                            <li
+                              key={r}
+                              className="text-[11px] text-slate-300 leading-snug"
+                            >
+                              {r}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Study information */}
+                    <div className="mb-2 rounded-md bg-slate-900/80 border border-slate-800 px-2 py-2">
+                      <p className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full"
+                          style={{
+                            backgroundColor:
+                              p.estadoPaciente === "Eligible"
+                                ? "#22c55e"
+                                : p.estadoPaciente === "To review"
+                                ? "#facc15"
+                                : "#ef4444",
+                          }}
+                        />
+                        Study information
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Study: <span className="font-medium">{p.estudioClinico}</span>
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Phase: <span className="font-medium">{phase}</span>
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Target: <span className="font-medium">{target}</span>
+                      </p>
+                    </div>
+
+                    {/* Audit & blockchain */}
+                    <div className="mb-2 rounded-md bg-slate-900 border border-slate-800 px-2 py-2">
+                      <p className="text-[11px] font-semibold text-slate-100 mb-1">
+                        Audit & blockchain
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        CID Filecoin:{" "}
+                        <span className="font-mono text-[10px]">{cidFilecoin}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        Input Hash:{" "}
+                        <span className="font-mono text-[10px]">{inputHash}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        Engine: <span className="font-medium">{engineVersion}</span>{" "}
+                        (hash
+                        <span className="font-mono text-[10px]"> {engineHash}</span>)
+                      </p>
+                    </div>
+
+                    {/* Credential links */}
+                    <div className="flex flex-col gap-1 mt-1">
+                      <a
+                        href={`/patient/${encodeURIComponent(p.id)}`}
+                        className="inline-flex justify-center items-center mb-1 px-3 py-1.5 rounded-full border border-sky-500 bg-sky-600/20 text-[11px] font-medium text-sky-200 hover:bg-sky-600/30"
+                      >
+                        View patient detail
+                      </a>
+                      <a
+                        href={`https://vc.example.com/user/${encodeURIComponent(p.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-sky-300 underline font-medium"
+                      >
+                        View user's Verified Credential
+                      </a>
+                      <a
+                        href={`https://vc.example.com/process/${encodeURIComponent(
+                          p.estudioClinico
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-sky-300 underline font-medium"
+                      >
+                        View process's Verified Credential
+                      </a>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Issued by Proof of Eligibility · Oasis TEE Attestation
+                      </p>
+                    </div>
+                  </>
                 )}
-                {p.estadoPaciente === "To review" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-amber-500/10 border-amber-400/60 text-amber-300">
-                    To review
-                  </span>
-                )}
-                {p.estadoPaciente === "Not eligible" && (
-                  <span className="text-[11px] px-2 py-1 rounded-full border bg-rose-500/10 border-rose-400/60 text-rose-300">
-                    Not eligible
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-300 mb-1">
-                Age: <span className="font-medium">{p.edad}</span> · Previous diagnosis:
-                <span className="font-medium"> {p.diagnosticoPrevio}</span>
-              </p>
-              <p className="text-xs text-slate-300">Symptoms: {p.sintomaPrincipal}</p>
-            </article>
-          ))}
-        </div>
+              </article>
+            );
+          })}
+          </div>
+        )}
+
+        {/* Handle de resize para pacientes */}
+        <div
+          className="absolute top-0 right-0 h-full w-1 cursor-col-resize bg-slate-800/40 hover:bg-sky-500/60 transition-colors"
+          onMouseDown={() => setDragging("patients")}
+        />
       </section>
 
       {/* Columna derecha: mapa (ocupa el resto) */}
       <section className="flex-1 h-full p-4 text-sm flex flex-col bg-slate-950/80">
+        {clusterSummary && (
+          <div className="mb-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-xs text-slate-100 shadow-md shadow-slate-950/40 transition-transform duration-200 ease-out hover:shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-slate-50">Cluster insights</h3>
+              <span className="text-[11px] text-slate-400">
+                {clusterSummary.total} patients
+              </span>
+            </div>
+
+            <div className="grid md:grid-cols-4 gap-4">
+              {/* Age distribution */}
+              <div
+                className="space-y-2 rounded-lg bg-slate-950/40 border border-slate-800 p-3 transition-transform duration-150 hover:scale-[1.01]"
+                title="Number of patients in this cluster by age range"
+              >
+                <p className="text-[11px] text-slate-400 mb-1">Age distribution</p>
+                <div className="space-y-1.5">
+                  {clusterSummary.ageBuckets.map((b) => {
+                    const percent = clusterSummary.total
+                      ? Math.round((b.count / clusterSummary.total) * 100)
+                      : 0;
+                    return (
+                      <div key={b.label} className="space-y-0.5">
+                        <div className="flex justify-between text-[11px]">
+                          <span>{b.label}</span>
+                          <span className="text-slate-400">{b.count}</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-sky-500 transition-all duration-300"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Clinical status (pie chart) */}
+              <div
+                className="space-y-2 rounded-lg bg-slate-950/40 border border-slate-800 p-3 transition-transform duration-150 hover:scale-[1.01]"
+                title="Percentage of patients by eligibility status"
+              >
+                <p className="text-[11px] text-slate-400 mb-1">Clinical status</p>
+                <div className="flex items-center gap-4">
+                  {/* Mini pie chart */}
+                  <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
+                    {(() => {
+                      const e = clusterSummary.statusPercentages.Eligible;
+                      const t = clusterSummary.statusPercentages.ToReview;
+                      const n = clusterSummary.statusPercentages.NotEligible;
+                      const total = e + t + n || 1;
+                      const eAngle = (e / total) * 360;
+                      const tAngle = (t / total) * 360;
+                      const nAngle = 360 - eAngle - tAngle;
+                      const gradient = `conic-gradient(#22c55e 0deg ${eAngle}deg, #facc15 ${eAngle}deg ${eAngle + tAngle}deg, #ef4444 ${eAngle + tAngle}deg ${eAngle + tAngle + nAngle}deg)`;
+                      return (
+                        <div
+                          className="w-full h-full rounded-full border border-slate-700 shadow-inner shadow-slate-950"
+                          style={{ backgroundImage: gradient }}
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-900/90 border border-slate-800 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
+                        Eligible
+                      </span>
+                      <span className="text-slate-300">
+                        {clusterSummary.statusPercentages.Eligible}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                        To review
+                      </span>
+                      <span className="text-slate-300">
+                        {clusterSummary.statusPercentages.ToReview}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-rose-400" />
+                        Not eligible
+                      </span>
+                      <span className="text-slate-300">
+                        {clusterSummary.statusPercentages.NotEligible}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top diagnoses */}
+              <div
+                className="space-y-2 rounded-lg bg-slate-950/40 border border-slate-800 p-3 transition-transform duration-150 hover:scale-[1.01]"
+                title="Most common previous diagnoses among patients in this cluster"
+              >
+                <p className="text-[11px] text-slate-400 mb-1">Top diagnoses</p>
+                <div className="flex items-center gap-4">
+                  {/* Donut diagnoses */}
+                  <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
+                    {(() => {
+                      const entries = clusterSummary.topDiagnoses;
+                      if (!entries.length) {
+                        return (
+                          <div className="w-full h-full rounded-full border border-slate-700 bg-slate-900/80" />
+                        );
+                      }
+                      const totalCount = entries.reduce((acc, d) => acc + d.count, 0) || 1;
+                      let start = 0;
+                      const segments: string[] = [];
+                      const colors = ["#38bdf8", "#6366f1", "#a855f7"];
+                      entries.forEach((d, idx) => {
+                        const angle = (d.count / totalCount) * 360;
+                        const end = idx === entries.length - 1 ? 360 : start + angle;
+                        const color = colors[idx % colors.length];
+                        segments.push(`${color} ${start}deg ${end}deg`);
+                        start = end;
+                      });
+                      const gradient = `conic-gradient(${segments.join(", ")})`;
+                      return (
+                        <div
+                          className="w-full h-full rounded-full border border-slate-700 shadow-inner shadow-slate-950"
+                          style={{ backgroundImage: gradient }}
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-900/90 border border-slate-800 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Leyenda diagnósticos (texto plano clickeable) */}
+                  <div className="flex-1 space-y-1">
+                    {clusterSummary.topDiagnoses.map((d, idx) => (
+                      <button
+                        key={d.label}
+                        type="button"
+                        onClick={() => setDiagnosis(d.label)}
+                        className="w-full flex items-center justify-between text-left text-[11px] text-slate-200 hover:text-slate-50 hover:bg-slate-900/60 rounded px-1 py-0.5 transition-colors"
+                      >
+                        <span className="flex items-center gap-1">
+                          <span
+                            className="inline-block w-2 h-2 rounded-full"
+                            style={{
+                              backgroundColor: ["#38bdf8", "#6366f1", "#a855f7"][idx % 3],
+                            }}
+                          />
+                          <span>{d.label}</span>
+                        </span>
+                        <span className="text-slate-300">{d.percent}%</span>
+                      </button>
+                    ))}
+                    {clusterSummary.topDiagnoses.length === 0 && (
+                      <span className="text-[11px] text-slate-500">No data</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top symptoms */}
+              <div
+                className="space-y-2 rounded-lg bg-slate-950/40 border border-slate-800 p-3 transition-transform duration-150 hover:scale-[1.01]"
+                title="Most common main symptoms among patients in this cluster"
+              >
+                <p className="text-[11px] text-slate-400 mb-1">Top symptoms</p>
+                <div className="flex items-center gap-4">
+                  {/* Donut symptoms */}
+                  <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
+                    {(() => {
+                      const entries = clusterSummary.topSymptoms;
+                      if (!entries.length) {
+                        return (
+                          <div className="w-full h-full rounded-full border border-slate-700 bg-slate-900/80" />
+                        );
+                      }
+                      const totalCount = entries.reduce((acc, s) => acc + s.count, 0) || 1;
+                      let start = 0;
+                      const segments: string[] = [];
+                      const colors = ["#f97316", "#22c55e", "#eab308"];
+                      entries.forEach((s, idx) => {
+                        const angle = (s.count / totalCount) * 360;
+                        const end = idx === entries.length - 1 ? 360 : start + angle;
+                        const color = colors[idx % colors.length];
+                        segments.push(`${color} ${start}deg ${end}deg`);
+                        start = end;
+                      });
+                      const gradient = `conic-gradient(${segments.join(", ")})`;
+                      return (
+                        <div
+                          className="w-full h-full rounded-full border border-slate-700 shadow-inner shadow-slate-950"
+                          style={{ backgroundImage: gradient }}
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-900/90 border border-slate-800 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Leyenda síntomas (texto plano clickeable) */}
+                  <div className="flex-1 space-y-1">
+                    {clusterSummary.topSymptoms.map((s, idx) => (
+                      <button
+                        key={s.label}
+                        type="button"
+                        onClick={() => setSymptom(s.label)}
+                        className="w-full flex items-center justify-between text-left text-[11px] text-slate-200 hover:text-slate-50 hover:bg-slate-900/60 rounded px-1 py-0.5 transition-colors"
+                      >
+                        <span className="flex items-center gap-1">
+                          <span
+                            className="inline-block w-2 h-2 rounded-full"
+                            style={{
+                              backgroundColor: ["#f97316", "#22c55e", "#eab308"][idx % 3],
+                            }}
+                          />
+                          <span>{s.label}</span>
+                        </span>
+                        <span className="text-slate-300">{s.percent}%</span>
+                      </button>
+                    ))}
+                    {clusterSummary.topSymptoms.length === 0 && (
+                      <span className="text-[11px] text-slate-500">No data</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="mb-3 flex items-center justify-between text-slate-100 text-sm">
           <h2 className="text-base font-semibold">Patient map</h2>
           <span className="text-xs text-slate-400">{totalResults} points</span>
         </div>
+
         <div className="flex-1 min-h-0">
           <ExploreMap
             patients={filteredPatients}
@@ -1139,6 +1744,7 @@ export default function ExplorePage() {
                 cardEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
               }
             }}
+            onClusterPatientsSelected={(pts) => setClusterPatients(pts)}
           />
         </div>
       </section>

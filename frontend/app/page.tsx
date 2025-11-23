@@ -225,14 +225,16 @@ export default function Home() {
 
             <div className="space-y-3 text-sm text-slate-200/90 mb-6">
               <p>
-                To continue, please validate your identity by scanning the QR code.
+                Scan your Verified Credential to start the pre-screening.
+
+
+                
               </p>
               <p>
-                All your information will remain confidential. This credential contains basic health information — such as your age, symptom history and, if applicable, results from previous cognitive assessments (for example, MoCA or MMSE).
+                Your data stays private and is processed securely.
               </p>
               <p className="text-xs text-slate-400">
-                By taking part in this pre-screening process, you are directly contributing to Alzheimer&apos;s research.
-                Your participation helps clinical teams advance new treatments and accelerate the development of therapies that may improve — and potentially save — lives.
+                Your participation helps advance Alzheimer’s research.
               </p>
             </div>
 
@@ -254,7 +256,7 @@ export default function Home() {
                 </PrimaryButton>
 
                 <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>DID resuelto vía DWN · VC de elegibilidad</span>
+                  <span>DID - DWN · VC</span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                     GDPR, HIPAA Compliance
@@ -943,10 +945,15 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Tienes antecedentes familiares de Alzheimer?
+                    Do you have a family history of Alzheimer&apos;s disease?
                   </p>
                   <div className="mt-2 space-y-2 text-sm text-slate-100">
-                    {["Sí, padre/madre", "Sí, abuelo/abuela", "No", "No lo sé"].map((opt) => (
+                    {[
+                      "Yes, parent",
+                      "Yes, grandparent",
+                      "No",
+                      "I don&apos;t know",
+                    ].map((opt) => (
                       <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
@@ -964,40 +971,44 @@ export default function Home() {
 
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Tienes alguna de estas condiciones médicas?
+                    Do you currently have any of these medical conditions?
                   </p>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
-                    {["Hipertensión", "Diabetes tipo 2", "Enfermedad cardíaca", "Depresión mayor", "Ninguna"].map(
-                      (opt) => (
-                        <label
-                          key={opt}
-                          className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 text-slate-100 border border-slate-800"
-                        >
-                          <input
-                            type="checkbox"
-                            value={opt}
-                            checked={formData.condicionesMedicas.includes(opt)}
-                            onChange={() => toggleCondicionMedica(opt)}
-                            className="text-sky-600"
-                          />
-                          <span>{opt}</span>
-                        </label>
-                      )
-                    )}
+                    {[
+                      "Hypertension",
+                      "Type 2 diabetes",
+                      "Heart disease",
+                      "Major depression",
+                      "None of the above",
+                    ].map((opt) => (
+                      <label
+                        key={opt}
+                        className="flex items-center gap-2 bg-slate-900 rounded-lg px-3 py-2 text-slate-100 border border-slate-800"
+                      >
+                        <input
+                          type="checkbox"
+                          value={opt}
+                          checked={formData.condicionesMedicas.includes(opt)}
+                          onChange={() => toggleCondicionMedica(opt)}
+                          className="text-sky-600"
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Estás tomando actualmente alguno de estos medicamentos?
+                    Are you currently taking any of these medications?
                   </p>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
                     {[
-                      "Inhibidores de colinesterasa (donepezilo, rivastigmina)",
-                      "Memantina",
-                      "Antipsicóticos",
-                      "Antidepresivos",
-                      "Ninguno",
+                      "Cholinesterase inhibitors (donepezil, rivastigmine)",
+                      "Memantine",
+                      "Antipsychotics",
+                      "Antidepressants",
+                      "None of the above",
                     ].map((opt) => (
                       <label
                         key={opt}
@@ -1027,10 +1038,10 @@ export default function Home() {
                   onClick={() => setCurrentStep(2)}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-slate-200 border border-slate-700 hover:bg-slate-800 transition-colors"
                 >
-                  Anterior
+                  Back
                 </button>
                 <PrimaryButton type="button" onClick={handleNextFromStep3}>
-                  Siguiente
+                  Next
                 </PrimaryButton>
               </div>
             </>
@@ -1041,10 +1052,10 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Has participado en otro ensayo clínico en los últimos 12 meses?
+                    Have you participated in another clinical trial in the last 12 months?
                   </p>
                   <div className="mt-2 space-y-2 text-sm text-slate-100">
-                    {["Sí", "No"].map((opt) => (
+                    {["Yes", "No"].map((opt) => (
                       <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
@@ -1062,10 +1073,10 @@ export default function Home() {
 
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Tienes antecedentes de ACV o convulsiones?
+                    Do you have a history of stroke or seizures?
                   </p>
                   <div className="mt-2 space-y-2 text-sm text-slate-100">
-                    {["Sí", "No"].map((opt) => (
+                    {["Yes", "No"].map((opt) => (
                       <label key={opt} className="flex items-center gap-2 text-slate-100">
                         <input
                           type="radio"
@@ -1083,10 +1094,10 @@ export default function Home() {
 
                 <div className="border border-slate-800 rounded-lg p-4 bg-slate-900/60">
                   <p className="block text-sm font-medium text-slate-100">
-                    ¿Posees un diagnóstico de demencia distinta a Alzheimer?
+                    Have you received a diagnosis of a dementia other than Alzheimer&apos;s?
                   </p>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-100">
-                    {["Parkinson", "Demencia frontotemporal", "Demencia vascular", "No"].map(
+                    {["Parkinson&apos;s disease", "Frontotemporal dementia", "Vascular dementia", "No"].map(
                       (opt) => (
                         <label
                           key={opt}
@@ -1117,10 +1128,10 @@ export default function Home() {
                   onClick={() => setCurrentStep(3)}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-slate-200 border border-slate-700 hover:bg-slate-800 transition-colors"
                 >
-                  Anterior
+                  Back
                 </button>
                 <PrimaryButton type="button" onClick={handleNextFromStep4}>
-                  Siguiente
+                  Next
                 </PrimaryButton>
               </div>
             </>
@@ -1130,37 +1141,37 @@ export default function Home() {
             <>
               <div className="space-y-4 text-slate-100 text-sm">
                 <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-                  <h2 className="font-semibold mb-2">Resumen de información clave</h2>
+                  <h2 className="font-semibold mb-2">Summary of key information</h2>
                   <dl className="space-y-1">
                     <div className="flex gap-2">
-                      <dt className="font-medium w-32">Edad:</dt>
-                      <dd>{formData.edad ?? "No informado"}</dd>
+                      <dt className="font-medium w-32">Age:</dt>
+                      <dd>{formData.edad ?? "Not provided"}</dd>
                     </div>
                     <div className="flex gap-2">
-                      <dt className="font-medium w-32">Diagnóstico previo:</dt>
-                      <dd>{formData.diagnosticoPrevio || "No informado"}</dd>
+                      <dt className="font-medium w-32">Previous diagnosis:</dt>
+                      <dd>{formData.diagnosticoPrevio || "Not provided"}</dd>
                     </div>
                     <div className="flex gap-2">
-                      <dt className="font-medium w-32">Síntomas:</dt>
+                      <dt className="font-medium w-32">Symptoms:</dt>
                       <dd>
                         {formData.sintomas.length > 0
                           ? formData.sintomas.join(", ")
-                          : "No informado"}
+                          : "Not provided"}
                       </dd>
                     </div>
                     <div className="flex gap-2">
-                      <dt className="font-medium w-32">Antecedentes familiares:</dt>
-                      <dd>{formData.antecedentesFamiliares || "No informado"}</dd>
+                      <dt className="font-medium w-32">Family history:</dt>
+                      <dd>{formData.antecedentesFamiliares || "Not provided"}</dd>
                     </div>
                   </dl>
                 </div>
 
                 <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-                  <p className="font-semibold mb-1 text-slate-100">Privacidad y procesamiento seguro</p>
+                  <p className="font-semibold mb-1 text-slate-100">Privacy and secure processing</p>
                   <p className="text-slate-100">
-                    Tus datos se convierten a un formato estructurado (compatible con FHIR), se
-                    cifran en tu navegador y se procesan dentro de un enclave seguro
-                    (confidential compute). Nadie del equipo ve tu información en texto plano.
+                    Your data is converted into a structured format (FHIR-compatible), encrypted in
+                    your browser, and processed inside a secure enclave (confidential compute).
+                    No one on the team can see your information in plain text.
                   </p>
                 </div>
 
@@ -1173,8 +1184,8 @@ export default function Home() {
                       className="mt-0.5 text-sky-600"
                     />
                     <span>
-                      Confirmo que autorizo el procesamiento seguro y cifrado de mis datos para
-                      evaluar mi elegibilidad para este ensayo clínico.
+                      I confirm that I authorize the secure and encrypted processing of my data to
+                      evaluate my eligibility for this clinical trial.
                     </span>
                   </label>
                 </div>
@@ -1190,10 +1201,10 @@ export default function Home() {
                   onClick={() => setCurrentStep(4)}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-slate-200 border border-slate-700 hover:bg-slate-800 transition-colors"
                 >
-                  Anterior
+                  Back
                 </button>
                 <PrimaryButton type="button" onClick={handleSubmit}>
-                  Enviar
+                  Submit
                 </PrimaryButton>
               </div>
             </>
