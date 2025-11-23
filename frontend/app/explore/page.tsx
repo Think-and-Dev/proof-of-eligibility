@@ -106,38 +106,95 @@ function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProp
     } as any;
 
     map.on("load", () => {
-      // Registrar imagen animada
-      if (!map.hasImage("pulsing-dot")) {
-        map.addImage("pulsing-dot", pulsingDot, { pixelRatio: 2 });
-      }
-
-      // Fuente con puntos sobre hospitales públicos de CABA
-      if (!map.getSource("pulsing-dot-source")) {
-        map.addSource("pulsing-dot-source", {
+      // Fuente de pacientes como GeoJSON clusterizado (se actualiza en otro efecto)
+      if (!map.getSource("patients-heatmap-source")) {
+        map.addSource("patients-heatmap-source", {
           type: "geojson",
           data: {
             type: "FeatureCollection",
-            features: hospitalPoints.map((coordinates) => ({
-              type: "Feature" as const,
-              properties: {},
-              geometry: {
-                type: "Point" as const,
-                coordinates,
-              },
-            })),
+            features: [],
+          },
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 40,
+        } as any);
+      }
+
+      // Capa de clústeres (círculos grandes con color según cantidad de puntos)
+      if (!map.getLayer("patients-clusters")) {
+        map.addLayer({
+          id: "patients-clusters",
+          type: "circle",
+          source: "patients-heatmap-source",
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": [
+              "step",
+              ["get", "point_count"],
+              "rgba(56, 189, 248, 0.6)",
+              20,
+              "rgba(37, 99, 235, 0.7)",
+              50,
+              "rgba(30, 64, 175, 0.9)",
+            ],
+            "circle-radius": [
+              "step",
+              ["get", "point_count"],
+              18,
+              20,
+              24,
+              50,
+              32,
+            ],
+            "circle-stroke-width": 1.5,
+            "circle-stroke-color": "rgba(15, 23, 42, 0.95)",
           },
         });
       }
 
-      // Capa que usa la imagen animada (inicialmente oculta si showHospitals es false)
-      if (!map.getLayer("pulsing-dot-layer")) {
+      // Número de pacientes dentro de cada clúster
+      if (!map.getLayer("patients-cluster-count")) {
         map.addLayer({
-          id: "pulsing-dot-layer",
+          id: "patients-cluster-count",
           type: "symbol",
-          source: "pulsing-dot-source",
+          source: "patients-heatmap-source",
+          filter: ["has", "point_count"],
           layout: {
-            "icon-image": showHospitals ? "pulsing-dot" : "",
-            "icon-allow-overlap": true,
+            // Para garantizar anonimidad: si el grupo es menor a 5, se muestra "≤5"
+            "text-field": [
+              "case",
+              ["<", ["get", "point_count"], 5],
+              "≤5",
+              ["to-string", ["get", "point_count"]],
+            ],
+            "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+            "text-size": 12,
+          },
+          paint: {
+            "text-color": "#e5e7eb",
+          },
+        });
+      }
+
+      // Puntos individuales no clusterizados, coloreados por estado
+      if (!map.getLayer("patients-unclustered-point")) {
+        map.addLayer({
+          id: "patients-unclustered-point",
+          type: "circle",
+          source: "patients-heatmap-source",
+          filter: ["!has", "point_count"],
+          paint: {
+            "circle-color": [
+              "case",
+              ["==", ["get", "estado"], "Eligible"],
+              "#22c55e",
+              ["==", ["get", "estado"], "To review"],
+              "#facc15",
+              "#ef4444",
+            ],
+            "circle-radius": 6,
+            "circle-stroke-width": 1.5,
+            "circle-stroke-color": "#020617",
           },
         });
       }
@@ -172,209 +229,63 @@ function ExploreMap({ patients, showHospitals, onSelectPatient }: ExploreMapProp
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const updateSourceAndBounds = () => {
+      const bounds = new mapboxgl.LngLatBounds();
 
-    // Limpiar marcadores previos guardados en el mapa
-    const prevMarkers = (map as any)._patientMarkers as mapboxgl.Marker[] | undefined;
-    if (prevMarkers && Array.isArray(prevMarkers)) {
-      prevMarkers.forEach((m) => m.remove());
-    }
+      // Centro de referencia para "compactar" los puntos mock sobre CABA
+      const compactCenter: [number, number] = [-58.41, -34.6];
+      const compactFactor = 0.8; // 1 = posiciones originales, <1 los acerca al centro
 
-    const markers: mapboxgl.Marker[] = [];
-    const bounds = new mapboxgl.LngLatBounds();
+      // Offsets para ajustar la posición en pantalla
+      const lngOffset = -0.07; // desplazar a la izquierda (oeste)
+      const latOffset = -0.02; // desplazar hacia abajo (sur)
 
-    // Centro de referencia para "compactar" los puntos mock sobre CABA
-    const compactCenter: [number, number] = [-58.41, -34.6];
-    const compactFactor = 0.8; // 1 = posiciones originales, <1 los acerca al centro
+      const features = patients.map((p) => {
+        const compactedLng =
+          compactCenter[0] + (p.lng - compactCenter[0]) * compactFactor;
+        const compactedLat =
+          compactCenter[1] + (p.lat - compactCenter[1]) * compactFactor;
 
-    // Offsets para ajustar la posición en pantalla
-    const lngOffset = -0.07; // desplazar a la izquierda (oeste)
-    const latOffset = -0.02; // desplazar hacia abajo (sur)
+        const shiftedLng = compactedLng + lngOffset;
+        const shiftedLat = compactedLat + latOffset;
 
-    patients.forEach((p) => {
-      const statusColor =
-        p.estadoPaciente === "Eligible"
-          ? "#22c55e" // green
-          : p.estadoPaciente === "To review"
-          ? "#facc15" // amber
-          : "#ef4444"; // red for Not eligible
-      const compactedLng =
-        compactCenter[0] + (p.lng - compactCenter[0]) * compactFactor;
-      const compactedLat =
-        compactCenter[1] + (p.lat - compactCenter[1]) * compactFactor;
+        bounds.extend([shiftedLng, shiftedLat]);
 
-      const shiftedLng = compactedLng + lngOffset;
-      const shiftedLat = compactedLat + latOffset;
-
-      const pseudoId = `SCR-${p.id}`;
-
-      const mocaScore =
-        p.estadoPaciente === "Eligible"
-          ? "26/30"
-          : p.estadoPaciente === "To review"
-          ? "23/30"
-          : "—";
-
-      const eligibilityReasons =
-        p.estadoPaciente === "Eligible"
-          ? ["Within target age range.", "No excluding comorbidities."]
-          : p.estadoPaciente === "To review"
-          ? ["Check comorbidities and cognitive score."]
-          : ["Does not meet inclusion criteria or presents exclusion criteria."];
-
-      const phase =
-        p.estudioClinico.startsWith("Alzheimer-") ||
-        p.estudioClinico.startsWith("Cancer de mama-")
-          ? "III"
-          : "II";
-
-      const target =
-        p.estudioClinico.startsWith("Alzheimer-Aducanumab")
-          ? "Alzheimer leve"
-          : p.estudioClinico.startsWith("Alzheimer-Lecanemab")
-          ? "MCI / Alzheimer temprano"
-          : p.estudioClinico.startsWith("Parkinson-Prasinezumab")
-          ? "Parkinson temprano"
-          : p.estudioClinico.startsWith("Parkinson-Tavapadon")
-          ? "Parkinson leve-moderado"
-          : "HER2+ cáncer de mama";
-
-      const cidFilecoin = `bafy-${p.id.toLowerCase()}`;
-      const inputHash = `0x${p.id.replace(/[^0-9]/g, "").padEnd(8, "0")}`;
-      const engineVersion = "v1.3.2";
-      const engineHash = "0x9f3a21";
-
-      const marker = new mapboxgl.Marker({ color: statusColor })
-        .setLngLat([shiftedLng, shiftedLat])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 12 }).setHTML(
-            `
-<div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #020617; max-width: 260px;">
-  <!-- 1. Identidad seudonimizada -->
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-    <div>
-      <div style="font-weight:600;">
-        Patient ${p.nombre.split(" ")[1]} <span style="color:#64748b;">(${p.id})</span>
-      </div>
-      <div style="font-size:10px; color:#475569; margin-top:2px;">
-        Pseudo-ID: <span style="font-weight:500;">${pseudoId}</span>
-      </div>
-    </div>
-    <span
-      style="padding:2px 6px; border-radius:999px; border:1px solid ${
-        p.estadoPaciente === "Eligible"
-          ? "#bbf7d0"
-          : p.estadoPaciente === "To review"
-          ? "#fed7aa"
-          : "#fecaca"
-      }; background-color:${
-        p.estadoPaciente === "Eligible"
-          ? "#ecfdf3"
-          : p.estadoPaciente === "To review"
-          ? "#fffbeb"
-          : "#fef2f2"
-      }; color:${
-        p.estadoPaciente === "Eligible"
-          ? "#15803d"
-          : p.estadoPaciente === "To review"
-          ? "#b45309"
-          : "#b91c1c"
-      }; font-size:10px; white-space:nowrap;">
-      ${p.estadoPaciente === "To review" ? "Review required" : p.estadoPaciente}
-    </span>
-  </div>
-
-  <!-- 3. Clinical data (collapsible) -->
-  <details open style="margin-bottom:4px; padding:4px 6px; background-color:#f8fafc; border-radius:6px;">
-    <summary style="cursor:pointer; color:#0f172a; font-weight:600; font-size:11px; list-style:none; display:flex; align-items:center; justify-content:space-between;">
-      <span>Clinical data</span>
-      <span style="font-size:10px; color:#64748b;">Tap to expand</span>
-    </summary>
-    <div style="margin-top:4px;">
-      <ul style="list-style:none; padding-left:0; margin:0;">
-        <li>Age: <span style="font-weight:500;">${p.edad}</span></li>
-        <li>Previous diagnosis: <span style="font-weight:500;">${p.diagnosticoPrevio}</span></li>
-        <li>Main symptoms: <span>${p.sintomaPrincipal}</span></li>
-        <li>MoCA: <span style="font-weight:500;">${mocaScore}</span></li>
-        <li style="margin-top:2px;">
-          Eligibility reason:
-          <ul style="margin:2px 0 0 12px; padding:0;">
-            ${eligibilityReasons
-              .map(
-                (r) =>
-                  `<li style="list-style:disc;">${r}</li>`
-              )
-              .join("")}
-          </ul>
-        </li>
-      </ul>
-    </div>
-  </details>
-
-  <!-- 4. Study information (collapsible) -->
-  <details style="margin-bottom:4px; padding:4px 6px; background-color:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;">
-    <summary style="cursor:pointer; color:#0f172a; font-weight:600; font-size:11px; list-style:none; display:flex; align-items:center; gap:4px;">
-      <span style="display:inline-block; width:8px; height:8px; border-radius:999px; background-color:${statusColor};"></span>
-      <span>Study information</span>
-    </summary>
-    <div style="font-size:10px; color:#111827; margin-top:4px;">
-      Study: <span style="font-weight:500;">${p.estudioClinico}</span><br/>
-      Phase: <span style="font-weight:500;">${phase}</span><br/>
-      Target: <span style="font-weight:500;">${target}</span>
-    </div>
-  </details>
-
-  <!-- 5. Auditoría y blockchain -->
-  <div style="margin-bottom:6px; padding:4px 6px; background-color:#0f172a; color:#e5e7eb; border-radius:6px; font-size:10px;">
-    <div style="font-weight:600; margin-bottom:2px;">Audit & blockchain</div>
-    <div>CID Filecoin: <span style="font-family:monospace;">${cidFilecoin}</span></div>
-    <div>Input Hash: <span style="font-family:monospace;">${inputHash}</span></div>
-    <div>Engine: <span style="font-weight:500;">${engineVersion}</span> (hash <span style="font-family:monospace;">${engineHash}</span>)</div>
-  </div>
-
-  <!-- 6. Accesos a credenciales -->
-  <div style="display:flex; flex-direction:column; gap:2px; margin-top:2px;">
-    <a
-      href="/patient/${encodeURIComponent(p.id)}"
-      style="display:inline-flex; justify-content:center; align-items:center; margin-bottom:4px; padding:4px 8px; border-radius:999px; border:1px solid #0f172a; background-color:#0f172a; color:#f9fafb; font-size:10px; font-weight:500; text-decoration:none;">
-      View patient detail
-    </a>
-    <a
-      href="https://vc.example.com/user/${encodeURIComponent(p.id)}"
-      target="_blank"
-      rel="noreferrer"
-      style="color:#0369a1; text-decoration:underline; font-weight:500;">
-      View user's Verified Credential
-    </a>
-    <a
-      href="https://vc.example.com/process/${encodeURIComponent(p.estudioClinico)}"
-      target="_blank"
-      rel="noreferrer"
-      style="color:#0369a1; text-decoration:underline; font-weight:500;">
-      View process's Verified Credential
-    </a>
-    <div style="font-size:9px; color:#64748b; margin-top:2px;">
-      Issued by Proof of Eligibility · Oasis TEE Attestation
-    </div>
-  </div>
-</div>
-            `.trim()
-          )
-        )
-        .addTo(map);
-
-      // Al hacer click en el marker (además del popup), seleccionar el paciente en la lista
-      marker.getElement().addEventListener("click", () => {
-        onSelectPatient(p.id);
+        return {
+          type: "Feature" as const,
+          properties: {
+            estado: p.estadoPaciente,
+          },
+          geometry: {
+            type: "Point" as const,
+            coordinates: [shiftedLng, shiftedLat],
+          },
+        };
       });
 
-      markers.push(marker);
-      bounds.extend([shiftedLng, shiftedLat]);
-    });
+      const source = map.getSource(
+        "patients-heatmap-source"
+      ) as mapboxgl.GeoJSONSource | undefined;
 
-    (map as any)._patientMarkers = markers;
+      if (source) {
+        source.setData({
+          type: "FeatureCollection",
+          features,
+        } as any);
+      }
 
-    if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 40, maxZoom: 13 });
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 40, maxZoom: 13 });
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      updateSourceAndBounds();
+    } else {
+      const onLoad = () => {
+        updateSourceAndBounds();
+      };
+      map.once("load", onLoad);
     }
   }, [patients]);
 
@@ -949,8 +860,51 @@ async function fetchPatientsFromBackend(): Promise<Patient[]> {
     },
   ];
 
+  // Generar 100 pacientes adicionales de forma random alrededor de CABA
+  const extraPatients: Patient[] = [];
+
+  const baseLng = -58.41;
+  const baseLat = -34.6;
+
+  const randomFrom = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+  const possibleDiagnoses = ["Alzheimer", "MCI", "No diagnosis"] as const;
+  const possibleSymptoms = [
+    "Memory loss",
+    "Difficulty concentrating",
+    "Difficulty finding words",
+    "Mood changes",
+  ];
+  const possibleStatus: Patient["estadoPaciente"][] = [
+    "Eligible",
+    "To review",
+    "Not eligible",
+  ];
+
+  for (let i = 1; i <= 100; i++) {
+    const idNumber = 50 + i;
+
+    // Pequeñas variaciones alrededor de CABA para dispersar los puntos
+    const jitterLng = (Math.random() - 0.5) * 0.18; // ~ +/- 0.09
+    const jitterLat = (Math.random() - 0.5) * 0.16; // ~ +/- 0.08
+
+    extraPatients.push({
+      id: `P-${idNumber.toString().padStart(3, "0")}`,
+      nombre: `Patient ${idNumber.toString().padStart(3, "0")}`,
+      edad: 55 + Math.floor(Math.random() * 21), // entre 55 y 75
+      diagnosticoPrevio: randomFrom([...possibleDiagnoses]),
+      sintomaPrincipal: randomFrom([...possibleSymptoms]),
+      estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
+      estadoPaciente: randomFrom(possibleStatus),
+      lng: baseLng + jitterLng,
+      lat: baseLat + jitterLat,
+    });
+  }
+
+  const allPatients = [...patients, ...extraPatients];
+
   // For the current demo, force all patients to belong to the same trial
-  return patients.map((p) => ({
+  return allPatients.map((p) => ({
     ...p,
     estudioClinico: "Alzheimer-Aducanumab-2023-06-01",
   }));
