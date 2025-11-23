@@ -5,6 +5,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 require('dotenv').config();
 const evaluateEligibility = require('./evaluate_eligibility');
+const { getDid, generateEligibilityVC } = require('./did');
 
 // --- Servidor Express ---
 
@@ -69,7 +70,7 @@ function decryptPayload(encrypted) {
 }
 
 // Endpoint POST para evaluar elegibilidad
-app.post('/evaluateEligibility', (req, res) => {
+app.post('/evaluateEligibility', async (req, res) => {
   try {
     console.log('Evaluating eligibility...');
 
@@ -86,12 +87,18 @@ app.post('/evaluateEligibility', (req, res) => {
       });
     }
 
-    const result = evaluateEligibility(input);
+    const eligibility = evaluateEligibility(input);
 
-    res.json({
-      eligible: result
-    });
-    console.log('Eligibility evaluated:', result);
+    console.log('Eligibility:', eligibility);
+
+    const localDid = await getDid();
+
+    console.log('Local DID:', localDid.uri);
+
+    const vc = await generateEligibilityVC(localDid, eligibility);
+
+    res.json(vc);
+    console.log('Eligibility VC generated:', vc);
   } catch (error) {
     res.status(500).json({
       error: 'Error processing request',

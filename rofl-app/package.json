@@ -5,6 +5,7 @@
     "main": "src/server.js",
     "scripts": {
         "start": "node src/server.js",
+        "generate-key": "node src/generate-key.js",
         "build-and-push": "./build-and-push.sh",
         "oasis-build": "oasis rofl build",
         "oasis-update": "oasis rofl update",
@@ -12,6 +13,7 @@
         "oasis-show": "oasis rofl show"
     },
     "dependencies": {
+        "@web5/dids": "^1.2.0",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
         "express": "^4.18.2"
