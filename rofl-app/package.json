@@ -13,6 +13,7 @@
         "oasis-show": "oasis rofl show"
     },
     "dependencies": {
+        "@tbd54566975/dwn-sdk-js": "^0.5.2",
         "@web5/dids": "^1.2.0",
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
