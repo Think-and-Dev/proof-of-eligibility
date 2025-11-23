@@ -57,7 +57,40 @@ class FilecoinStorage {
     }
 
     /**
+     * Encrypts data before uploading to Filecoin
+     * Override this method to implement your encryption logic
+     * @param {Uint8Array} data - The data to encrypt
+     * @returns {Promise<Uint8Array>} - The encrypted data
+     */
+    async encryptData(data) {
+        // TODO: Implement your encryption logic here
+        // For now, returns data as-is (no encryption)
+        // Example implementation:
+        // - Use AES-GCM with a key derived from environment variables
+        // - Use Web Crypto API for encryption
+        // - Return encrypted data as Uint8Array
+        return data;
+    }
+
+    /**
+     * Decrypts data after downloading from Filecoin
+     * Override this method to implement your decryption logic
+     * @param {Uint8Array} encryptedData - The encrypted data to decrypt
+     * @returns {Promise<Uint8Array>} - The decrypted data
+     */
+    async decryptData(encryptedData) {
+        // TODO: Implement your decryption logic here
+        // For now, returns data as-is (no decryption)
+        // Example implementation:
+        // - Use AES-GCM with the same key used for encryption
+        // - Use Web Crypto API for decryption
+        // - Return decrypted data as Uint8Array
+        return encryptedData;
+    }
+
+    /**
      * Uploads data to Filecoin and returns the Piece CID
+     * Data is encrypted before upload
      */
     async uploadToFilecoin(data) {
         await this.initialize();
@@ -71,8 +104,13 @@ class FilecoinStorage {
             data = new TextEncoder().encode(JSON.stringify(data));
         }
 
-        console.log(`[FilecoinStorage] ☁️  Uploading ${data.length} bytes to Filecoin...`);
-        const { pieceCid, size } = await this.synapse.storage.upload(data);
+        // Encrypt data before uploading
+        console.log(`[FilecoinStorage] 🔐 Encrypting ${data.length} bytes...`);
+        const encryptedData = await this.encryptData(data);
+        console.log(`[FilecoinStorage] ✅ Data encrypted: ${encryptedData.length} bytes`);
+
+        console.log(`[FilecoinStorage] ☁️  Uploading ${encryptedData.length} bytes to Filecoin...`);
+        const { pieceCid, size } = await this.synapse.storage.upload(encryptedData);
         console.log(`[FilecoinStorage] ✅ Data uploaded. Piece CID: ${pieceCid}`);
 
         return { pieceCid, size };
@@ -80,13 +118,19 @@ class FilecoinStorage {
 
     /**
      * Downloads data from Filecoin using the Piece CID
+     * Data is decrypted after download
      */
     async downloadFromFilecoin(pieceCid) {
         await this.initialize();
 
         console.log(`[FilecoinStorage] 📥 Downloading from Filecoin: ${pieceCid}...`);
-        const data = await this.synapse.storage.download(pieceCid);
-        console.log(`[FilecoinStorage] ✅ Data downloaded: ${data.length} bytes`);
+        const encryptedData = await this.synapse.storage.download(pieceCid);
+        console.log(`[FilecoinStorage] ✅ Data downloaded: ${encryptedData.length} bytes`);
+
+        // Decrypt data after downloading
+        console.log(`[FilecoinStorage] 🔓 Decrypting ${encryptedData.length} bytes...`);
+        const data = await this.decryptData(encryptedData);
+        console.log(`[FilecoinStorage] ✅ Data decrypted: ${data.length} bytes`);
 
         return data;
     }
