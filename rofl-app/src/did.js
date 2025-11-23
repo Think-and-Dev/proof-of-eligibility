@@ -20,8 +20,8 @@ async function getDid() {
 
     if (!privateKeyJwk) {
         throw new Error(
-            'PRIVATE_KEY_JWK debe estar configurado en las variables de entorno.\n' +
-            'Formato esperado: JSON string con formato JWK completo:\n' +
+            'PRIVATE_KEY_JWK must be configured in environment variables.\n' +
+            'Expected format: JSON string with JWK complete format:\n' +
             '{\n' +
             '  "kty": "OKP",\n' +
             '  "crv": "Ed25519",\n' +
@@ -35,14 +35,14 @@ async function getDid() {
     let publicKeyJwkObj;
 
     try {
-        // Parsear el JWK
+        // Parse the JWK
         const jwk = typeof privateKeyJwk === 'string' ? JSON.parse(privateKeyJwk) : privateKeyJwk;
 
         if (!jwk.kty || !jwk.crv || !jwk.d || !jwk.x) {
-            throw new Error('PRIVATE_KEY_JWK debe contener kty, crv, x (clave pública) y d (clave privada)');
+            throw new Error('PRIVATE_KEY_JWK must contain kty, crv, x (public key) and d (private key)');
         }
 
-        // Extraer la clave pública (sin 'd')
+        // Extract the public key (without 'd')
         publicKeyJwkObj = {
             kty: jwk.kty,
             crv: jwk.crv,
@@ -51,21 +51,21 @@ async function getDid() {
 
         privateKeyJwkObj = jwk;
     } catch (error) {
-        throw new Error(`Error al parsear PRIVATE_KEY_JWK: ${error.message}`);
+        throw new Error(`Error parsing PRIVATE_KEY_JWK: ${error.message}`);
     }
 
-    // 1. Derivar el DID URI desde la clave pública
+    // 1. Derive the DID URI from the public key
     const multibaseId = await DidKeyUtils.publicKeyToMultibaseId({ publicKey: publicKeyJwkObj });
     const didUri = `did:${DidKey.methodName}:${multibaseId}`;
 
-    // 2. Resolver el DID para obtener el documento
+    // 2. Resolve the DID to get the document
     const resolutionResult = await DidKey.resolve(didUri);
 
     if (!resolutionResult.didDocument) {
-        throw new Error(`No se pudo resolver el DID: ${didUri}`);
+        throw new Error(`Could not resolve the DID: ${didUri}`);
     }
 
-    // 3. Construir el PortableDid
+    // 3. Construct the PortableDid
     const portableDid = {
         uri: didUri,
         document: resolutionResult.didDocument,
@@ -73,10 +73,10 @@ async function getDid() {
         privateKeys: [privateKeyJwkObj]
     };
 
-    // 4. Importar el DID usando DidKey.import()
+    // 4. Import the DID using DidKey.import()
     const did = await DidKey.import({ portableDid });
 
-    console.log(`   ✅ DID obtenido desde clave privada: ${did.uri}\n`);
+    console.log(`   ✅ DID obtained from private key: ${did.uri}\n`);
     return did;
 }
 
@@ -98,25 +98,25 @@ async function getDid() {
  * ```
  */
 async function generatePrivateKeyJwk() {
-    // 1. Crear un nuevo DID con algoritmo Ed25519
+    // 1. Create a new did using Ed25519
     const did = await DidKey.create({ options: { algorithm: 'Ed25519' } });
 
-    // 2. Exportar el DID a formato PortableDid para obtener las claves privadas
+    // 2. Export did to a portable did to get private keys
     const portableDid = await did.export();
 
-    // 3. Extraer el JWK de la clave privada
+    // 3. Extract pks
     if (!portableDid.privateKeys || portableDid.privateKeys.length === 0) {
-        throw new Error('No se encontraron claves privadas en el DID exportado');
+        throw new Error('No private keys found in the exported DID');
     }
 
     const privateKeyJwk = portableDid.privateKeys[0];
 
-    // 4. Validar que el JWK tenga los campos necesarios
+    // 4. Validate that the JWK has the necessary fields
     if (!privateKeyJwk.kty || !privateKeyJwk.crv || !privateKeyJwk.x || !privateKeyJwk.d) {
-        throw new Error('El JWK generado no contiene todos los campos necesarios (kty, crv, x, d)');
+        throw new Error('The generated JWK does not contain all the necessary fields (kty, crv, x, d)');
     }
 
-    // 5. Devolver como string JSON (sin espacios para facilitar copiar al .env)
+    // 5. Return as string JSON (without spaces to facilitate copying to .env)
     return JSON.stringify(privateKeyJwk);
 }
 
@@ -128,29 +128,29 @@ async function generatePrivateKeyJwk() {
  */
 async function generateAndPrintPrivateKeyJwk() {
     try {
-        console.log('\n🔑 Generando nuevo par de claves Ed25519...\n');
+        console.log('\n🔑 Generating new Ed25519 key pair...\n');
 
-        // Crear DID y obtener tanto el JWK como el URI
+        // Create DID and get the JWK and URI
         const did = await DidKey.create({ options: { algorithm: 'Ed25519' } });
         const portableDid = await did.export();
 
         if (!portableDid.privateKeys || portableDid.privateKeys.length === 0) {
-            throw new Error('No se encontraron claves privadas en el DID exportado');
+            throw new Error('No private keys found in the exported DID');
         }
 
         const privateKeyJwk = portableDid.privateKeys[0];
         const privateKeyJwkString = JSON.stringify(privateKeyJwk);
         const didUri = portableDid.uri;
 
-        console.log('✅ Clave generada exitosamente!\n');
-        console.log('📋 Copia esto a tu archivo .env:\n');
+        console.log('✅ Key generated successfully!\n');
+        console.log('📋 Copy this to your .env file:\n');
         console.log('─'.repeat(60));
         console.log(`PRIVATE_KEY_JWK='${privateKeyJwkString}'`);
         console.log('─'.repeat(60));
-        console.log(`\n🔗 DID asociado: ${didUri}\n`);
-        console.log('⚠️  IMPORTANTE: Guarda esta clave de forma segura. No la compartas públicamente.\n');
+        console.log(`\n🔗 Associated DID: ${didUri}\n`);
+        console.log('⚠️  IMPORTANT: Store this key securely. Do not share it publicly.\n');
     } catch (error) {
-        console.error('❌ Error al generar la clave:', error.message);
+        console.error('❌ Error generating the key:', error.message);
         throw error;
     }
 }
