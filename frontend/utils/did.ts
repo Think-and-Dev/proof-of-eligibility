@@ -228,7 +228,7 @@ export async function generateTrialFormVC(did: BearerDid, fhirPayload: any): Pro
     const expirationDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
 
     // 1. Create the VC structure without proof
-    const vc = {
+    const vc: any = {
         '@context': [
             'https://www.w3.org/2018/credentials/v1',
             'https://w3id.org/security/suites/ed25519-2020/v1'
@@ -259,7 +259,7 @@ export async function generateTrialFormVC(did: BearerDid, fhirPayload: any): Pro
     delete vcForSigning.proof; // Remove proof if it exists
 
     // Sort keys for consistent canonicalization
-    const sortedVC = {};
+    const sortedVC: any = {};
     const keys = Object.keys(vcForSigning).sort();
     for (const key of keys) {
         sortedVC[key] = vcForSigning[key];
