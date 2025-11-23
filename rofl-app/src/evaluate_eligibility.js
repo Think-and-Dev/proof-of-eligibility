@@ -117,3 +117,5 @@ function evaluateEligibility(input) {
     // Si pasa todas las reglas, lo consideramos elegible para el ensayo
     return true;
 }
+
+module.exports = evaluateEligibility;

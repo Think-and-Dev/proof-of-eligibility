@@ -1,4 +1,5 @@
 const { DidKey, DidKeyUtils } = require('@web5/dids');
+const crypto = require('crypto');
 
 
 /**
@@ -155,8 +156,112 @@ async function generateAndPrintPrivateKeyJwk() {
     }
 }
 
-function generateEligibilityVC() {
+/**
+ * Generates a signed Verifiable Credential (VC) for proof of eligibility.
+ * 
+ * Creates a VC with a valid proof signature using the provided DID's signer.
+ * The VC follows the W3C Verifiable Credentials standard with Ed25519Signature2020 proof.
+ * 
+ * @param {BearerDid} did - The DID that will sign the VC (issuer)
+ * @param {Object} options - Optional parameters for the VC
+ * @param {string} options.credentialSubjectId - The DID or identifier of the credential subject (default: did.uri)
+ * @param {Object} options.credentialSubject - Additional data for the credential subject
+ * @param {string} options.credentialId - Unique identifier for the credential (default: auto-generated)
+ * @param {string} options.expirationDate - ISO date string for credential expiration (optional)
+ * 
+ * @returns {Promise<Object>} A signed Verifiable Credential with proof
+ * 
+ * @example
+ * ```javascript
+ * const did = await getDid();
+ * const vc = await generateEligibilityVC(did, {
+ *   credentialSubjectId: 'did:example:patient123',
+ *   credentialSubject: {
+ *     eligibility: true,
+ *     status: 'Approved'
+ *   }
+ * });
+ * ```
+ */
+async function generateEligibilityVC(did, eligibility, options = {}) {
+    if (!did || !did.uri) {
+        throw new Error('A valid BearerDid object is required');
+    }
 
+    const {
+        credentialSubjectId = did.uri,
+        credentialSubject = {},
+        credentialId = `urn:uuid:${crypto.randomUUID()}`,
+        expirationDate
+    } = options;
+
+    // 1. Create the VC structure without proof
+    const vc = {
+        '@context': [
+            'https://www.w3.org/2018/credentials/v1',
+            'https://w3id.org/security/suites/ed25519-2020/v1'
+        ],
+        id: credentialId,
+        type: ['VerifiableCredential', 'ProofOfEligibility'],
+        issuer: did.uri,
+        issuanceDate: new Date().toISOString(),
+        credentialSubject: {
+            id: credentialSubjectId,
+            type: 'ProofOfEligibility',
+            data: {
+                eligibility: eligibility,
+            },
+            ...credentialSubject
+        }
+    };
+
+    // Add expiration date if provided
+    if (expirationDate) {
+        vc.expirationDate = expirationDate;
+    }
+
+    // 2. Get the signer from the DID
+    const signer = await did.getSigner();
+
+    // 3. Create a canonical representation of the VC for signing
+    // For proper VC signing, we need to create a normalized representation
+    // TODO: This is a simplified approach, we might want to use a proper JSON-LD canonicalization in the future
+    const vcForSigning = JSON.parse(JSON.stringify(vc)); // Deep clone
+    delete vcForSigning.proof; // Remove proof if it exists
+
+    // Sort keys for consistent canonicalization
+    const sortedVC = {};
+    const keys = Object.keys(vcForSigning).sort();
+    for (const key of keys) {
+        sortedVC[key] = vcForSigning[key];
+    }
+
+    const canonicalVC = JSON.stringify(sortedVC);
+
+    // 4. Sign the canonical VC
+    const vcBytes = new TextEncoder().encode(canonicalVC);
+    const signature = await signer.sign({ data: vcBytes });
+
+    // 5. Convert signature to base64url for the proof
+    const signatureBase64Url = Buffer.from(signature)
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+
+    // 6. Create the proof object
+    const proof = {
+        type: 'Ed25519Signature2020',
+        created: new Date().toISOString(),
+        verificationMethod: signer.keyId,
+        proofPurpose: 'assertionMethod',
+        proofValue: signatureBase64Url
+    };
+
+    // 7. Add the proof to the VC
+    vc.proof = proof;
+
+    return vc;
 }
 
 module.exports = {
