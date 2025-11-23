@@ -131,91 +131,92 @@ export interface GrantAccessResponse {
  * });
  * ```
  */
-// export async function grantAccessToDid(
-//     yourDid: BearerDid,
-//     targetDidUri: string,
-//     options: GrantAccessOptions = {}
-// ): Promise<GrantAccessResponse> {
-//     const DWN_SERVER_URL = process.env.NEXT_PUBLIC_DWN_SERVER_URL || 'http://localhost:3000';
+export async function grantAccessToDid(
+    yourDid: BearerDid,
+    targetDidUri: string,
+    options: GrantAccessOptions = {}
+): Promise<GrantAccessResponse> {
+    throw new Error('Not implemented yet');
+    //     const DWN_SERVER_URL = process.env.NEXT_PUBLIC_DWN_SERVER_URL || 'http://localhost:3000';
 
-//     if (!yourDid?.uri) {
-//         throw new Error('A valid BearerDid object is required');
-//     }
+    //     if (!yourDid?.uri) {
+    //         throw new Error('A valid BearerDid object is required');
+    //     }
 
-//     if (!targetDidUri || typeof targetDidUri !== 'string') {
-//         throw new Error('A valid target DID URI is required');
-//     }
+    //     if (!targetDidUri || typeof targetDidUri !== 'string') {
+    //         throw new Error('A valid target DID URI is required');
+    //     }
 
-//     // Dynamic import to avoid SSR issues
-//     // const dwnSdk = await import('@tbd54566975/dwn-sdk-js');
-//     // console.log("dwnSdk: ", dwnSdk);
-//     // const PermissionGrant = (dwnSdk as any).PermissionGrant || (dwnSdk as any).PermissionsGrant;
+    //     // Dynamic import to avoid SSR issues
+    //     // const dwnSdk = await import('@tbd54566975/dwn-sdk-js');
+    //     // console.log("dwnSdk: ", dwnSdk);
+    //     // const PermissionGrant = (dwnSdk as any).PermissionGrant || (dwnSdk as any).PermissionsGrant;
 
-//     if (!PermissionGrant) {
-//         throw new Error('PermissionGrant not found in DWN SDK');
-//     }
+    //     if (!PermissionGrant) {
+    //         throw new Error('PermissionGrant not found in DWN SDK');
+    //     }
 
-//     const signer = await yourDid.getSigner();
+    //     const signer = await yourDid.getSigner();
 
-//     // Adapt the signer to the format expected by DWN SDK
-//     const dwnSigner = {
-//         keyId: signer.keyId,
-//         algorithm: signer.algorithm,
-//         sign: async (content: Uint8Array): Promise<Uint8Array> => {
-//             return await signer.sign({ data: content });
-//         }
-//     };
+    //     // Adapt the signer to the format expected by DWN SDK
+    //     const dwnSigner = {
+    //         keyId: signer.keyId,
+    //         algorithm: signer.algorithm,
+    //         sign: async (content: Uint8Array): Promise<Uint8Array> => {
+    //             return await signer.sign({ data: content });
+    //         }
+    //     };
 
-//     // Create the PermissionGrant
-//     const permissionsGrant = await PermissionGrant.create({
-//         dateCreated: Date.now(),
-//         grantedBy: yourDid.uri,
-//         grantedTo: targetDidUri,
-//         grantedFor: yourDid.uri,
-//         scope: {
-//             method: 'RecordsRead',
-//             ...options.scope // You can add schema, protocol, etc.
-//         },
-//         signer: dwnSigner,
-//     });
+    //     // Create the PermissionGrant
+    //     const permissionsGrant = await PermissionGrant.create({
+    //         dateCreated: Date.now(),
+    //         grantedBy: yourDid.uri,
+    //         grantedTo: targetDidUri,
+    //         grantedFor: yourDid.uri,
+    //         scope: {
+    //             method: 'RecordsRead',
+    //             ...options.scope // You can add schema, protocol, etc.
+    //         },
+    //         signer: dwnSigner,
+    //     });
 
-//     // Generate a unique ID for the request
-//     const requestId = generateUUID();
+    //     // Generate a unique ID for the request
+    //     const requestId = generateUUID();
 
-//     // Send to DWN server
-//     const grantRequest = {
-//         jsonrpc: '2.0' as const,
-//         method: 'dwn.processMessage' as const,
-//         params: {
-//             target: yourDid.uri,
-//             message: permissionsGrant.toJSON(),
-//         },
-//         id: requestId,
-//     };
+    //     // Send to DWN server
+    //     const grantRequest = {
+    //         jsonrpc: '2.0' as const,
+    //         method: 'dwn.processMessage' as const,
+    //         params: {
+    //             target: yourDid.uri,
+    //             message: permissionsGrant.toJSON(),
+    //         },
+    //         id: requestId,
+    //     };
 
-//     const response = await fetch(DWN_SERVER_URL, {
-//         method: 'POST',
-//         headers: {
-//             'dwn-request': JSON.stringify(grantRequest),
-//             'Content-Type': 'application/json',
-//         },
-//     });
+    //     const response = await fetch(DWN_SERVER_URL, {
+    //         method: 'POST',
+    //         headers: {
+    //             'dwn-request': JSON.stringify(grantRequest),
+    //             'Content-Type': 'application/json',
+    //         },
+    //     });
 
-//     if (!response.ok) {
-//         throw new Error(`Failed to grant access: HTTP ${response.status} ${response.statusText}`);
-//     }
+    //     if (!response.ok) {
+    //         throw new Error(`Failed to grant access: HTTP ${response.status} ${response.statusText}`);
+    //     }
 
-//     const result: GrantAccessResponse = await response.json();
+    //     const result: GrantAccessResponse = await response.json();
 
-//     if (result.error) {
-//         throw new Error(
-//             `Failed to grant access: ${result.error.message || JSON.stringify(result.error)}`
-//         );
-//     }
+    //     if (result.error) {
+    //         throw new Error(
+    //             `Failed to grant access: ${result.error.message || JSON.stringify(result.error)}`
+    //         );
+    //     }
 
-//     console.log(`✅ Access granted to ${targetDidUri}`);
-//     return result;
-// }
+    //     console.log(`✅ Access granted to ${targetDidUri}`);
+    //     return result;
+}
 
 export async function generateTrialFormVC(did: BearerDid, fhirPayload: any): Promise<any> {
     if (!did || !did.uri) {
